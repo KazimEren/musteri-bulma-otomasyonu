@@ -2,6 +2,8 @@
 
 Kullanıcının girdiği dinamik proje açıklamasına göre hedef kitleyi belirleyen, Google Maps ve LinkedIn üzerinden veri toplayan, Jina.ai ile web sitelerini analiz edip Supabase'e kaydeden ve Gmail'de kişiselleştirilmiş taslak e-postalar oluşturan uçtan uca bir otomasyon backend'i.
 
+Repo: https://github.com/KazimEren/musteri-bulma-otomasyonu
+
 Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.md).
 
 ## 6 Adımlı Akış
