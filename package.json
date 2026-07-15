@@ -1,0 +1,33 @@
+{
+  "name": "musteri-bulma-otomasyonu",
+  "version": "0.1.0",
+  "description": "Dinamik proje analizinden Gmail taslak e-postasına uzanan 6 adımlı müşteri bulma otomasyonu backend'i",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "worker:dev": "tsx watch src/queue/pipeline.worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/queue/pipeline.worker.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "bullmq": "^5.34.6",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "googleapis": "^144.0.0",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
