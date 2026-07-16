@@ -49,16 +49,16 @@ async function processLead(projectDescription: string, lead: RoutedLead): Promis
 }
 
 async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promise<PipelineJobResult> {
-  const { projectDescription, maxResultsPerLocation = 20 } = job.data;
+  const { projectDescription, maxResultsPerLocation = 20, targetSectorHint, targetLocationHint, scaleFilter = "all" } = job.data;
 
   await job.updateProgress({ step: 1, label: "Dinamik Proje Analizi" });
-  const analysis = await analyzeProject(projectDescription);
+  const analysis = await analyzeProject(projectDescription, { targetSectorHint, targetLocationHint });
 
   await job.updateProgress({ step: 2, label: "Akıllı Filtreleme (Google Maps)" });
   const mapsLeads = await searchGoogleMaps(analysis, maxResultsPerLocation);
 
   await job.updateProgress({ step: 3, label: "Şirket Ölçeği Ayrımı" });
-  const routedLeads = routeByCompanyScale(mapsLeads);
+  const routedLeads = routeByCompanyScale(mapsLeads).filter((lead) => scaleFilter === "all" || lead.scale === scaleFilter);
 
   await job.updateProgress({ step: "4-6", label: "Veri Toplama + Analiz + Gmail Taslak" });
   const results = await mapWithConcurrency(routedLeads, env.LEAD_PROCESSING_CONCURRENCY, (lead) =>
@@ -68,6 +68,7 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
 
   return {
     totalLeadsFound: mapsLeads.length,
+    totalLeadsMatchingScale: routedLeads.length,
     totalDraftsCreated: finalizedLeads.length,
     leads: finalizedLeads,
   };

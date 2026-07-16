@@ -1,5 +1,5 @@
 import { generateJson } from "../services/gemini.service.js";
-import { buildAnalyzeProjectPrompt } from "../prompts/analyze-project.prompt.js";
+import { buildAnalyzeProjectPrompt, type AnalyzeProjectHints } from "../prompts/analyze-project.prompt.js";
 import type { ProjectAnalysis } from "../types/index.js";
 
 interface RawAnalysis {
@@ -12,9 +12,10 @@ interface RawAnalysis {
  * Adım 1: Dinamik Proje Analizi (LLM Prompting)
  * Kullanıcının proje açıklamasını Gemini'ye gönderip hedef sektör, anahtar kelime
  * ve lokasyonları çıkarır. Referans: 1_maps_omurga.json → "Parse Search Intent" node'u.
+ * Arayüzden gelen sektör/lokasyon ipuçları varsa (bkz. AnalyzeProjectHints) LLM'e yön verir.
  */
-export async function analyzeProject(projectDescription: string): Promise<ProjectAnalysis> {
-  const prompt = buildAnalyzeProjectPrompt(projectDescription);
+export async function analyzeProject(projectDescription: string, hints: AnalyzeProjectHints = {}): Promise<ProjectAnalysis> {
+  const prompt = buildAnalyzeProjectPrompt(projectDescription, hints);
   const raw = await generateJson<RawAnalysis>(prompt);
 
   if (!raw.keywords?.length || !raw.locations?.length) {

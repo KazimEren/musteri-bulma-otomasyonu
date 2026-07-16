@@ -1,7 +1,12 @@
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import { env } from "./config/env.js";
 import { pipelineRoutes } from "./routes/pipeline.routes.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = Fastify({
   logger: {
@@ -10,6 +15,9 @@ const app = Fastify({
 });
 
 await app.register(cors);
+await app.register(fastifyStatic, {
+  root: join(__dirname, "..", "public"),
+});
 await app.register(pipelineRoutes);
 
 app.get("/health", async () => ({ status: "ok" }));

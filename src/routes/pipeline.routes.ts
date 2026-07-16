@@ -5,6 +5,9 @@ import { enqueuePipelineJob, pipelineQueue } from "../queue/pipeline.queue.js";
 const startPipelineSchema = z.object({
   projectDescription: z.string().min(10, "Proje açıklaması en az 10 karakter olmalı"),
   maxResultsPerLocation: z.number().int().positive().max(50).optional(),
+  targetSectorHint: z.string().min(1).optional(),
+  targetLocationHint: z.string().min(1).optional(),
+  scaleFilter: z.enum(["all", "large", "small"]).optional(),
 });
 
 export async function pipelineRoutes(app: FastifyInstance) {

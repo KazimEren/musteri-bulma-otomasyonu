@@ -77,10 +77,17 @@ export interface FinalizedLead extends AnalyzedLead {
 export interface PipelineJobInput {
   projectDescription: string;
   maxResultsPerLocation?: number;
+  /** Kullanıcı arayüzden doğrudan hedef sektör belirtmek isterse Adım 1'in LLM analizine yön verir. */
+  targetSectorHint?: string;
+  /** Kullanıcı arayüzden doğrudan hedef lokasyon belirtmek isterse Adım 1'in LLM analizine yön verir. */
+  targetLocationHint?: string;
+  /** Sadece belirli ölçekteki lead'ler işlensin istenirse (varsayılan: ikisi de). */
+  scaleFilter?: CompanyScale | "all";
 }
 
 export interface PipelineJobResult {
   totalLeadsFound: number;
+  totalLeadsMatchingScale: number;
   totalDraftsCreated: number;
   leads: FinalizedLead[];
 }

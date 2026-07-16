@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Müşteri Bulma Otomasyonu</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>Müşteri Bulma Otomasyonu</h1>
+      <p class="subtitle">Proje açıklamanızdan hedef kitle bulup Gmail'de kişiselleştirilmiş taslak e-postalar oluşturur.</p>
+    </header>
+
+    <main>
+      <section class="card" id="form-card">
+        <form id="pipeline-form">
+          <label class="field">
+            <span class="field-label">Projeniz / Ürününüz <span class="required">*</span></span>
+            <textarea
+              id="projectDescription"
+              name="projectDescription"
+              rows="4"
+              required
+              minlength="10"
+              placeholder="Örn: İstanbul'daki küçük işletmelere WhatsApp üzerinden otomatik randevu hatırlatma hizmeti sunan bir SaaS ürünüyüm."
+            ></textarea>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">Hedef Sektör / Meslek <span class="optional">(opsiyonel)</span></span>
+              <input type="text" id="targetSectorHint" name="targetSectorHint" placeholder="Örn: Avukatlar, Yazılım Firmaları" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Hedef Konum <span class="optional">(opsiyonel)</span></span>
+              <input type="text" id="targetLocationHint" name="targetLocationHint" placeholder="Örn: İstanbul, Türkiye" />
+            </label>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Şirket Ölçeği</span>
+            <div class="radio-group" id="scaleFilter">
+              <label class="radio-option">
+                <input type="radio" name="scaleFilter" value="all" checked />
+                <span>Tümü</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="scaleFilter" value="large" />
+                <span>Sadece Büyük Ölçekli <small>(LinkedIn hattı)</small></span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="scaleFilter" value="small" />
+                <span>Sadece Küçük Ölçekli <small>(Web scraper hattı)</small></span>
+              </label>
+            </div>
+          </div>
+
+          <label class="field field-narrow">
+            <span class="field-label">Lokasyon Başına Sonuç Limiti</span>
+            <input type="number" id="maxResultsPerLocation" name="maxResultsPerLocation" min="1" max="50" value="10" />
+            <span class="field-hint">Her arama terimi × lokasyon başına çekilecek işletme sayısı. Yüksek değerler daha fazla API kredisi harcar.</span>
+          </label>
+
+          <button type="submit" id="submit-btn">Pipeline'ı Başlat</button>
+        </form>
+      </section>
+
+      <section class="card hidden" id="progress-card">
+        <h2>İlerleme</h2>
+        <ol class="stepper" id="stepper">
+          <li data-step="1"><span class="step-index">1</span><span class="step-label">Dinamik Proje Analizi</span></li>
+          <li data-step="2"><span class="step-index">2</span><span class="step-label">Akıllı Filtreleme (Google Maps)</span></li>
+          <li data-step="3"><span class="step-index">3</span><span class="step-label">Şirket Ölçeği Ayrımı</span></li>
+          <li data-step="4-6"><span class="step-index">4-6</span><span class="step-label">Veri Toplama + Analiz + Gmail Taslak</span></li>
+        </ol>
+        <p class="status-line">
+          <span id="status-badge" class="badge badge-active">Beklemede</span>
+          <span id="status-detail"></span>
+        </p>
+      </section>
+
+      <section class="card hidden" id="error-card">
+        <h2>Hata</h2>
+        <p id="error-message" class="error-text"></p>
+      </section>
+
+      <section class="card hidden" id="results-card">
+        <h2>Sonuçlar</h2>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-value" id="stat-found">0</span>
+            <span class="stat-label">Bulunan Lead</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-matching">0</span>
+            <span class="stat-label">Filtreye Uyan</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-drafts">0</span>
+            <span class="stat-label">Oluşturulan Taslak</span>
+          </div>
+        </div>
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th>Firma</th>
+              <th>Ölçek</th>
+              <th>İletişim</th>
+              <th>E-posta Konusu</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody"></tbody>
+        </table>
+        <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener" class="drafts-link">
+          Gmail Taslaklar klasörünü aç ↗
+        </a>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -19,6 +19,17 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
 
 Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir.
 
+## Yerel Arayüz
+
+`npm run dev` çalışırken `public/` altındaki statik dosyalar (`index.html`, `style.css`, `app.js`) Fastify tarafından otomatik servis edilir — ayrı bir frontend build/dev sunucusu gerekmez. Tarayıcıda **http://localhost:3000** adresine gidip:
+
+- Proje açıklamanı ve opsiyonel hedef sektör/konum ipuçlarını gir,
+- Şirket ölçeği filtresini (Tümü / Sadece Büyük / Sadece Küçük) seç,
+- "Pipeline'ı Başlat"a tıkla — 6 adımlık ilerleme canlı olarak (3 saniyede bir `GET /pipeline/:jobId` sorgulanarak) gösterilir,
+- Tamamlandığında bulunan/filtrelenen/taslak oluşturulan lead sayıları ve taslak listesi görüntülenir.
+
+Worker (`npm run worker:dev`) ayrıca çalışıyor olmalı, aksi halde job kuyrukta bekler ve arayüzde "Kuyrukta" durumunda takılı kalır.
+
 ### Tasarım notu: neden bazı şeyler bilinçli olarak eksik
 
 - `4_supabase_analiz.json` şablonundaki DIGITAL DETECTIVE lead-profilleme promptu (kanıta dayalı, meşru) korundu; aynı dosyadaki e-posta yazım promptu sahte duygusal şantaj senaryosu (jailbreak tarzı) içerdiği için **kullanılmadı**. Onun yerine `2_linkedin_rehber.json`'daki temiz structured-output promptu kullanıldı.
@@ -76,7 +87,10 @@ Content-Type: application/json
 
 {
   "projectDescription": "İstanbul'daki küçük işletmelere randevu hatırlatma SaaS'ı sunuyorum.",
-  "maxResultsPerLocation": 5   // opsiyonel, varsayılan 20, üst sınır 50
+  "maxResultsPerLocation": 5,        // opsiyonel, varsayılan 20, üst sınır 50
+  "targetSectorHint": "Avukatlar",   // opsiyonel, Adım 1'in sektör/keyword çıkarımına yön verir
+  "targetLocationHint": "Kadıköy, İstanbul", // opsiyonel, Adım 1'in lokasyon çıkarımını buna sabitler
+  "scaleFilter": "small"             // opsiyonel: "all" (varsayılan) | "large" | "small"
 }
 ```
 
@@ -90,7 +104,7 @@ GET /pipeline/:jobId
 
 → `{ "jobId", "state", "progress", "result", "failedReason" }`
 
-`result.leads`, sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır.
+`result.leads`, sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır. `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsMatchingScale` `scaleFilter` uygulandıktan sonraki (Adım 4-6'ya giren) sayıdır.
 
 **Sağlık kontrolü**: `GET /health`
 
