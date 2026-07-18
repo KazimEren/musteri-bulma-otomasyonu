@@ -1,3 +1,10 @@
+function requestShutdown() {
+  navigator.sendBeacon("/shutdown");
+}
+
+window.addEventListener("pagehide", requestShutdown);
+window.addEventListener("beforeunload", requestShutdown);
+
 const form = document.getElementById("pipeline-form");
 const submitBtn = document.getElementById("submit-btn");
 
