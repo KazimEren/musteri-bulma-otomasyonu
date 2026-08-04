@@ -45,7 +45,7 @@ export function buildLeadsWorkbook(result: PipelineJobResult): ExcelJS.Workbook 
     const row = worksheet.addRow({
       scale: SCALE_LABELS[lead.scale],
       companyName: lead.title,
-      email: lead.contactEmail ?? "",
+      email: lead.contactEmail,
       business: lead.analysis.profileSummary,
       pitch: lead.analysis.problemSolutionPitch,
       ...(includeEmailDraft ? { emailDraft: formatEmailDraft(lead) } : {}),

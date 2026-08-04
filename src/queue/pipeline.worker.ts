@@ -5,6 +5,7 @@ import type {
   AnalyzedLead,
   EnrichedLead,
   FinalizedLead,
+  OutputType,
   PipelineJobInput,
   PipelineJobResult,
   RejectionReason,
@@ -42,53 +43,22 @@ async function enrichLead(lead: RoutedLead): Promise<EnrichedLead | null> {
 }
 
 /**
- * "draft": bugünkü davranış — e-postası bulunamayan lead Adım 6'ya giremeyeceği için kalıcı
- * olarak elenir (dedup bunu hatırlar) ve sonuçtan düşer.
+ * Adım 5-6: e-postası bulunamayan lead, çıktı türünden bağımsız olarak Gemini'ye (analiz/öneri/taslak
+ * üretimine) HİÇ gitmeden kalıcı olarak elenir — hem gereksiz token harcamayı önler hem de Excel
+ * çıktısındaki E-Posta sütununun asla boş kalmamasını garanti eder.
  */
-async function processDraftLead(projectDescription: string, lead: RoutedLead): Promise<FinalizedLead | null> {
+async function processLead(projectDescription: string, lead: RoutedLead, outputType: OutputType): Promise<FinalizedLead | null> {
   const enriched = await enrichLead(lead);
   if (!enriched) return null;
 
-  const analysis = await analyzeLeadFit(projectDescription, enriched);
-  const analyzed: AnalyzedLead = { ...enriched, analysis };
-
-  const contactEmail = analyzed.linkedin?.email ?? analyzed.webScrape?.emails[0];
+  const contactEmail = enriched.linkedin?.email ?? enriched.webScrape?.emails[0];
   if (!contactEmail) {
-    // Adım 6 için e-posta adresi şart; kalıcı bir dead-end olduğu için Adım 2b bunu hatırlar.
-    await saveRejectedLead(analyzed, "no_contact_email", { linkedin: analyzed.linkedin, analysis: analyzed.analysis }).catch(
-      logSaveError,
-    );
+    await saveRejectedLead(enriched, "no_contact_email", { linkedin: enriched.linkedin }).catch(logSaveError);
     return null;
   }
 
-  try {
-    await saveLeadAnalysis(analyzed);
-  } catch (err) {
-    logSaveError(err);
-  }
-
-  const email = await draftColdEmail(analyzed);
-  const gmailDraftId = await createGmailDraft(email, contactEmail);
-
-  return { ...analyzed, contactEmail, email, gmailDraftId };
-}
-
-/**
- * "excel_info" | "excel_full": Gmail API'ye hiç gidilmez, bu yüzden e-posta adresi şart değil
- * (bulunamazsa Excel'de boş hücre olarak kalır). "excel_full" ayrıca bir e-posta taslağı METNİ
- * üretir (Excel'in 6. sütunu için) ama bunu Gmail'e göndermez/kaydetmez.
- */
-async function processExcelLead(
-  projectDescription: string,
-  lead: RoutedLead,
-  outputType: "excel_info" | "excel_full",
-): Promise<FinalizedLead | null> {
-  const enriched = await enrichLead(lead);
-  if (!enriched) return null;
-
   const analysis = await analyzeLeadFit(projectDescription, enriched);
   const analyzed: AnalyzedLead = { ...enriched, analysis };
-  const contactEmail = analyzed.linkedin?.email ?? analyzed.webScrape?.emails[0];
 
   try {
     await saveLeadAnalysis(analyzed);
@@ -96,8 +66,15 @@ async function processExcelLead(
     logSaveError(err);
   }
 
-  const email = outputType === "excel_full" ? await draftColdEmail(analyzed) : undefined;
+  if (outputType === "draft") {
+    const email = await draftColdEmail(analyzed);
+    const gmailDraftId = await createGmailDraft(email, contactEmail);
+    return { ...analyzed, contactEmail, email, gmailDraftId };
+  }
 
+  // "excel_full" ayrıca bir e-posta taslağı METNİ üretir (Excel'in son sütunu için) ama bunu
+  // Gmail'e hiç göndermez/kaydetmez; "excel_info" bu adımı da atlayarak daha da hızlı çalışır.
+  const email = outputType === "excel_full" ? await draftColdEmail(analyzed) : undefined;
   return { ...analyzed, contactEmail, email };
 }
 
@@ -129,9 +106,7 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
     label: outputType === "draft" ? "Veri Toplama + Analiz + Gmail Taslak" : "Veri Toplama + Analiz",
   });
   const results = await mapWithConcurrency(routedLeads, env.LEAD_PROCESSING_CONCURRENCY, (lead) =>
-    outputType === "draft"
-      ? processDraftLead(projectDescription, lead)
-      : processExcelLead(projectDescription, lead, outputType),
+    processLead(projectDescription, lead, outputType),
   );
   const finalizedLeads = results.filter((lead): lead is FinalizedLead => lead !== null);
 

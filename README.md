@@ -15,13 +15,14 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
 5. **Ölçeğe Göre Veri Toplama**
    - Büyük ölçek → LinkedIn hattı: Apify ile karar verici kişi aranır, **LinkedIn şirket sayfasının web sitesi Google Maps'teki domain ile eşleşmiyorsa aday reddedilir** (`step4a-linkedin.ts`).
    - Küçük ölçek → Adım 4'te zaten kazınan web sitesi verisi kullanılır, ek bir Jina çağrısı yapılmaz (`step4b-webscrape.ts`).
-6. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
-7. **Çıktı** — kullanıcının seçtiği `outputType`'a göre üç moddan biri çalışır (`pipeline.worker.ts`):
-   - `draft` (varsayılan) — kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`); e-postası bulunamayan lead atlanır.
+6. **E-Posta Kapısı** — **çıktı türünden bağımsız olarak**, iletişim e-postası (LinkedIn ya da web sitesi kazımasından) bulunamayan lead Gemini'ye (analiz/öneri/taslak üretimine) hiç gitmeden kalıcı olarak elenir (`no_contact_email`); böylece hem gereksiz token harcanmaz hem de Excel çıktısındaki E-Posta sütunu asla boş kalmaz (`pipeline.worker.ts` → `processLead`).
+7. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
+8. **Çıktı** — kullanıcının seçtiği `outputType`'a göre üç moddan biri çalışır (`pipeline.worker.ts`):
+   - `draft` (varsayılan) — kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`).
    - `excel_info` — Gmail'e hiç gidilmez, e-posta taslağı da üretilmez (jet hızlı, az token); sonuç sadece şirket analizi + öneri olarak Excel'e hazır tutulur.
    - `excel_full` — `excel_info`'ya ek olarak bir e-posta taslağı METNİ üretilir ama Gmail'e hiç gönderilmez/kaydedilmez, sadece Excel'in bir sütununa yazılır.
 
-Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir. Excel modlarında `result.leads`, e-postası bulunamayan lead'leri de içerir (e-posta hücresi boş kalır) — draft modunun aksine, e-posta zorunlu değildir.
+Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir. `result.leads`'teki her lead'in (çıktı türünden bağımsız) geçerli bir `contactEmail`'i vardır.
 
 Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
 
@@ -116,7 +117,7 @@ GET /pipeline/:jobId
 
 → `{ "jobId", "state", "progress", "result", "failedReason" }`
 
-`outputType: "draft"` iken `result.leads` sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır (ama Supabase'e `rejected` olarak kaydedilir, bkz. yukarıdaki Akış bölümü). `excel_info`/`excel_full` modlarında e-posta zorunlu değildir, bulunamayan lead'ler de sonuca dahil edilir (e-posta hücresi boş kalır). `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsAlreadyKnown` dedup'ta atlanan (daha önce taranmış) sayıdır, `result.totalLeadsMatchingScale` dedup + `scaleFilter` uygulandıktan sonraki (Adım 5-7'ye giren) sayıdır.
+`outputType`'tan bağımsız olarak `result.leads`, sadece geçerli bir iletişim e-postası (`contactEmail`) bulunan lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler Gemini analizine hiç girmeden sessizce atlanır (ama Supabase'e `rejected` olarak kaydedilir, bkz. yukarıdaki Akış bölümü). `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsAlreadyKnown` dedup'ta atlanan (daha önce taranmış) sayıdır, `result.totalLeadsMatchingScale` dedup + `scaleFilter` uygulandıktan sonraki (Adım 5-8'e giren) sayıdır.
 
 **Excel indir**
 

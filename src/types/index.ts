@@ -80,8 +80,12 @@ export interface EmailDraft {
 }
 
 export interface FinalizedLead extends AnalyzedLead {
-  /** LinkedIn'den ya da web sitesinden bulunan iletişim e-postası (bulunamadıysa undefined). */
-  contactEmail?: string;
+  /**
+   * LinkedIn'den ya da web sitesinden bulunan iletişim e-postası. Çıktı türünden bağımsız olarak
+   * ZORUNLU: e-postası bulunamayan lead Gemini analizine hiç girmeden "rejected" olarak elenir
+   * (bkz. pipeline.worker.ts → processLead), bu yüzden FinalizedLead'e ulaşan her satırda dolu olur.
+   */
+  contactEmail: string;
   /** "draft" modunda Gmail'e taslak olarak gidenle aynı metin; "excel_full" modunda sadece Excel'e yazılır, Gmail'e hiç gitmez. */
   email?: EmailDraft;
   /** Sadece outputType="draft" olduğunda ve gerçekten bir Gmail taslağı oluşturulduğunda dolu olur. */
