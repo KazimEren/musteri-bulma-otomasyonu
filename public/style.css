@@ -86,7 +86,10 @@ body {
 }
 
 .hidden {
-  display: none;
+  /* !important: bu bir yardımcı/utility sınıfı — .field gibi kendi "display" değeri olan
+     bileşen sınıflarıyla aynı elemanda birlikte kullanıldığında (örn. "field hidden"),
+     kaynak sırasından bağımsız olarak HER ZAMAN kazanmalı. */
+  display: none !important;
 }
 
 .field {
