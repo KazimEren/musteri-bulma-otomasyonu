@@ -80,8 +80,12 @@ export interface EmailDraft {
 }
 
 export interface FinalizedLead extends AnalyzedLead {
-  email: EmailDraft;
-  gmailDraftId: string;
+  /** LinkedIn'den ya da web sitesinden bulunan iletişim e-postası (bulunamadıysa undefined). */
+  contactEmail?: string;
+  /** "draft" modunda Gmail'e taslak olarak gidenle aynı metin; "excel_full" modunda sadece Excel'e yazılır, Gmail'e hiç gitmez. */
+  email?: EmailDraft;
+  /** Sadece outputType="draft" olduğunda ve gerçekten bir Gmail taslağı oluşturulduğunda dolu olur. */
+  gmailDraftId?: string;
 }
 
 // Adım 2b: dedup için Supabase "leads" tablosundaki kalıcı durum
@@ -94,6 +98,15 @@ export type LeadPersistStatus = "processed" | "rejected";
  */
 export type RejectionReason = "no_contact_email" | "linkedin_verification_failed" | "enrichment_failed";
 
+/**
+ * Pipeline'ın üreteceği çıktı türü:
+ * - "draft": bugünkü davranış — Gmail'de gerçek taslak oluşturulur, e-postası bulunamayan lead atlanır.
+ * - "excel_info": sadece şirket analizi/önerisi üretilir (e-posta taslağı YAZILMAZ, Gmail'e hiç gidilmez); jet hızlı, az token.
+ * - "excel_full": excel_info'ya ek olarak bir e-posta taslağı metni de üretilir ama Gmail'e hiç gönderilmez/kaydedilmez,
+ *   sadece Excel'in 6. sütununa yazılır.
+ */
+export type OutputType = "draft" | "excel_info" | "excel_full";
+
 // Pipeline job giriş verisi (kullanıcının girdiği proje açıklaması)
 export interface PipelineJobInput {
   projectDescription: string;
@@ -104,6 +117,8 @@ export interface PipelineJobInput {
   targetLocationHint?: string;
   /** Sadece belirli ölçekteki lead'ler işlensin istenirse (varsayılan: ikisi de). */
   scaleFilter?: CompanyScale | "all";
+  /** Varsayılan: "draft". */
+  outputType?: OutputType;
 }
 
 export interface PipelineJobResult {
@@ -123,5 +138,6 @@ export interface SearchProject {
   targetLocationHint: string | null;
   scaleFilter: CompanyScale | "all";
   maxResultsPerLocation: number | null;
+  outputType: OutputType;
   createdAt: string;
 }

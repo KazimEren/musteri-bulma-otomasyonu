@@ -41,15 +41,19 @@ async function enrichLead(lead: RoutedLead): Promise<EnrichedLead | null> {
   }
 }
 
-async function processLead(projectDescription: string, lead: RoutedLead): Promise<FinalizedLead | null> {
+/**
+ * "draft": bugünkü davranış — e-postası bulunamayan lead Adım 6'ya giremeyeceği için kalıcı
+ * olarak elenir (dedup bunu hatırlar) ve sonuçtan düşer.
+ */
+async function processDraftLead(projectDescription: string, lead: RoutedLead): Promise<FinalizedLead | null> {
   const enriched = await enrichLead(lead);
   if (!enriched) return null;
 
   const analysis = await analyzeLeadFit(projectDescription, enriched);
   const analyzed: AnalyzedLead = { ...enriched, analysis };
 
-  const targetEmail = analyzed.linkedin?.email ?? analyzed.webScrape?.emails[0];
-  if (!targetEmail) {
+  const contactEmail = analyzed.linkedin?.email ?? analyzed.webScrape?.emails[0];
+  if (!contactEmail) {
     // Adım 6 için e-posta adresi şart; kalıcı bir dead-end olduğu için Adım 2b bunu hatırlar.
     await saveRejectedLead(analyzed, "no_contact_email", { linkedin: analyzed.linkedin, analysis: analyzed.analysis }).catch(
       logSaveError,
@@ -64,13 +68,48 @@ async function processLead(projectDescription: string, lead: RoutedLead): Promis
   }
 
   const email = await draftColdEmail(analyzed);
-  const gmailDraftId = await createGmailDraft(email, targetEmail);
+  const gmailDraftId = await createGmailDraft(email, contactEmail);
 
-  return { ...analyzed, email, gmailDraftId };
+  return { ...analyzed, contactEmail, email, gmailDraftId };
+}
+
+/**
+ * "excel_info" | "excel_full": Gmail API'ye hiç gidilmez, bu yüzden e-posta adresi şart değil
+ * (bulunamazsa Excel'de boş hücre olarak kalır). "excel_full" ayrıca bir e-posta taslağı METNİ
+ * üretir (Excel'in 6. sütunu için) ama bunu Gmail'e göndermez/kaydetmez.
+ */
+async function processExcelLead(
+  projectDescription: string,
+  lead: RoutedLead,
+  outputType: "excel_info" | "excel_full",
+): Promise<FinalizedLead | null> {
+  const enriched = await enrichLead(lead);
+  if (!enriched) return null;
+
+  const analysis = await analyzeLeadFit(projectDescription, enriched);
+  const analyzed: AnalyzedLead = { ...enriched, analysis };
+  const contactEmail = analyzed.linkedin?.email ?? analyzed.webScrape?.emails[0];
+
+  try {
+    await saveLeadAnalysis(analyzed);
+  } catch (err) {
+    logSaveError(err);
+  }
+
+  const email = outputType === "excel_full" ? await draftColdEmail(analyzed) : undefined;
+
+  return { ...analyzed, contactEmail, email };
 }
 
 async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promise<PipelineJobResult> {
-  const { projectDescription, maxResultsPerLocation = 20, targetSectorHint, targetLocationHint, scaleFilter = "all" } = job.data;
+  const {
+    projectDescription,
+    maxResultsPerLocation = 20,
+    targetSectorHint,
+    targetLocationHint,
+    scaleFilter = "all",
+    outputType = "draft",
+  } = job.data;
 
   await job.updateProgress({ step: 1, label: "Dinamik Proje Analizi" });
   const analysis = await analyzeProject(projectDescription, { targetSectorHint, targetLocationHint });
@@ -85,9 +124,14 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
   await job.updateProgress({ step: 3, label: "Şirket Ölçeği Ayrımı (Kurumsallık Skorlaması)" });
   const routedLeads = await routeByCompanyScale(newLeads, scaleFilter);
 
-  await job.updateProgress({ step: "4-6", label: "Veri Toplama + Analiz + Gmail Taslak" });
+  await job.updateProgress({
+    step: "4-6",
+    label: outputType === "draft" ? "Veri Toplama + Analiz + Gmail Taslak" : "Veri Toplama + Analiz",
+  });
   const results = await mapWithConcurrency(routedLeads, env.LEAD_PROCESSING_CONCURRENCY, (lead) =>
-    processLead(projectDescription, lead),
+    outputType === "draft"
+      ? processDraftLead(projectDescription, lead)
+      : processExcelLead(projectDescription, lead, outputType),
   );
   const finalizedLeads = results.filter((lead): lead is FinalizedLead => lead !== null);
 

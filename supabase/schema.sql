@@ -15,7 +15,7 @@ create table if not exists public.leads (
   maps_url text,
   scale text not null check (scale in ('large', 'small')),
   corporate_score integer check (corporate_score is null or (corporate_score >= 0 and corporate_score <= 100)),
-  -- "processed": Adım 6'ya kadar tamamlanıp Gmail taslağı oluşturulmuş lead.
+  -- "processed": analizi tamamlanmış lead (outputType="draft" ise Gmail taslağı da oluşturulmuştur).
   -- "rejected": kalıcı bir sebeple (rejection_reason) pipeline'dan düşürülmüş lead.
   status text not null default 'processed' check (status in ('processed', 'rejected')),
   rejection_reason text check (
@@ -46,6 +46,7 @@ create table if not exists public.search_projects (
   target_location_hint text,
   scale_filter text not null default 'all' check (scale_filter in ('all', 'large', 'small')),
   max_results_per_location integer,
+  output_type text not null default 'draft' check (output_type in ('draft', 'excel_info', 'excel_full')),
   created_at timestamptz not null default now()
 );
 

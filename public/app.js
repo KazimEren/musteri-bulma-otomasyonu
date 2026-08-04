@@ -19,8 +19,30 @@ const stepperItems = Array.from(document.querySelectorAll("#stepper li"));
 const STEP_ORDER = ["1", "2", "2b", "3", "4-6"];
 
 const historySelect = document.getElementById("historySelect");
+const excelContentField = document.getElementById("excelContentField");
+const gmailDraftsLink = document.getElementById("gmail-drafts-link");
+const excelDownloadLink = document.getElementById("excel-download-link");
+const statDraftsLabel = document.getElementById("stat-drafts-label");
 
 let pollTimer = null;
+let currentJobId = null;
+let lastOutputType = "draft";
+
+function getOutputTypeMode() {
+  return form.querySelector('input[name="outputTypeMode"]:checked')?.value ?? "draft";
+}
+
+function updateExcelContentVisibility() {
+  if (getOutputTypeMode() === "excel") {
+    showCard(excelContentField);
+  } else {
+    hideCard(excelContentField);
+  }
+}
+
+form.querySelectorAll('input[name="outputTypeMode"]').forEach((radio) => {
+  radio.addEventListener("change", updateExcelContentVisibility);
+});
 
 function formatHistoryLabel(project) {
   const date = new Date(project.createdAt);
@@ -60,8 +82,17 @@ historySelect.addEventListener("change", () => {
   document.getElementById("maxResultsPerLocation").value = project.maxResultsPerLocation ?? 10;
 
   const scaleValue = project.scaleFilter ?? "all";
-  const radio = form.querySelector(`input[name="scaleFilter"][value="${scaleValue}"]`);
-  if (radio) radio.checked = true;
+  const scaleRadio = form.querySelector(`input[name="scaleFilter"][value="${scaleValue}"]`);
+  if (scaleRadio) scaleRadio.checked = true;
+
+  const outputType = project.outputType ?? "draft";
+  const outputModeRadio = form.querySelector(`input[name="outputTypeMode"][value="${outputType === "draft" ? "draft" : "excel"}"]`);
+  if (outputModeRadio) outputModeRadio.checked = true;
+  if (outputType !== "draft") {
+    const excelContentRadio = form.querySelector(`input[name="excelContentType"][value="${outputType}"]`);
+    if (excelContentRadio) excelContentRadio.checked = true;
+  }
+  updateExcelContentVisibility();
 });
 
 loadSearchHistory();
@@ -118,6 +149,7 @@ function renderResults(result) {
   document.getElementById("stat-known").textContent = result.totalLeadsAlreadyKnown ?? 0;
   document.getElementById("stat-matching").textContent = result.totalLeadsMatchingScale ?? 0;
   document.getElementById("stat-drafts").textContent = result.totalDraftsCreated ?? 0;
+  statDraftsLabel.textContent = lastOutputType === "draft" ? "Oluşturulan Taslak" : "Oluşturulan Satır";
 
   const tbody = document.getElementById("leads-tbody");
   tbody.innerHTML = "";
@@ -125,14 +157,18 @@ function renderResults(result) {
   const leads = result.leads ?? [];
   if (leads.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="4" style="color: var(--text-muted); text-align: center;">Taslak oluşturulan lead bulunamadı.</td>';
+    row.innerHTML = '<td colspan="4" style="color: var(--text-muted); text-align: center;">Sonuç oluşturulan lead bulunamadı.</td>';
     tbody.appendChild(row);
   }
 
   for (const lead of leads) {
     const row = document.createElement("tr");
 
-    const contact = lead.linkedin ? `${escapeHtml(lead.linkedin.fullName)} — ${escapeHtml(lead.linkedin.title || "")}` : "Web sitesi üzerinden";
+    const contact = lead.linkedin
+      ? `${escapeHtml(lead.linkedin.fullName)} — ${escapeHtml(lead.linkedin.title || "")}`
+      : lead.contactEmail
+        ? escapeHtml(lead.contactEmail)
+        : "Web sitesi üzerinden";
 
     row.innerHTML = `
       <td>${escapeHtml(lead.title)}</td>
@@ -141,6 +177,15 @@ function renderResults(result) {
       <td>${escapeHtml(lead.email?.subject ?? "")}</td>
     `;
     tbody.appendChild(row);
+  }
+
+  if (lastOutputType === "draft") {
+    showCard(gmailDraftsLink);
+    hideCard(excelDownloadLink);
+  } else {
+    hideCard(gmailDraftsLink);
+    excelDownloadLink.href = `/pipeline/${currentJobId}/download-excel`;
+    showCard(excelDownloadLink);
   }
 
   showCard(resultsCard);
@@ -214,6 +259,11 @@ form.addEventListener("submit", async (event) => {
   const maxResults = Number(formData.get("maxResultsPerLocation"));
   if (Number.isFinite(maxResults) && maxResults > 0) payload.maxResultsPerLocation = maxResults;
 
+  const outputTypeMode = formData.get("outputTypeMode");
+  const outputType = outputTypeMode === "excel" ? formData.get("excelContentType") || "excel_info" : "draft";
+  if (outputType !== "draft") payload.outputType = outputType;
+  lastOutputType = outputType;
+
   try {
     const res = await fetch("/pipeline", {
       method: "POST",
@@ -227,6 +277,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     const { jobId } = await res.json();
+    currentJobId = jobId;
     pollTimer = setInterval(() => pollJob(jobId), 3000);
     pollJob(jobId);
   } catch (err) {

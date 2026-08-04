@@ -10,7 +10,7 @@
   <div class="page">
     <header class="page-header">
       <h1>Müşteri Bulma Otomasyonu</h1>
-      <p class="subtitle">Proje açıklamanızdan hedef kitle bulup Gmail'de kişiselleştirilmiş taslak e-postalar oluşturur.</p>
+      <p class="subtitle">Proje açıklamanızdan hedef kitle bulup Gmail'de kişiselleştirilmiş taslak e-postalar oluşturur ya da Excel (.xlsx) olarak dışa aktarır.</p>
     </header>
 
     <main>
@@ -45,6 +45,34 @@
               <span class="field-label">Hedef Konum <span class="optional">(opsiyonel)</span></span>
               <input type="text" id="targetLocationHint" name="targetLocationHint" placeholder="Örn: İstanbul, Türkiye" />
             </label>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Çıktı Türü</span>
+            <div class="radio-group" id="outputTypeGroup">
+              <label class="radio-option">
+                <input type="radio" name="outputTypeMode" value="draft" checked />
+                <span>Gmail Taslak E-Posta <small>(varsayılan)</small></span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="outputTypeMode" value="excel" />
+                <span>Excel Çıktısı <small>(.xlsx)</small></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field hidden" id="excelContentField">
+            <span class="field-label">Excel İçeriği</span>
+            <div class="radio-group" id="excelContentGroup">
+              <label class="radio-option">
+                <input type="radio" name="excelContentType" value="excel_info" checked />
+                <span>Sadece Şirket Bilgileri ve Öneriler</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="excelContentType" value="excel_full" />
+                <span>Şirket Bilgileri + Hazır Mail Taslağı</span>
+              </label>
+            </div>
           </div>
 
           <div class="field">
@@ -112,7 +140,7 @@
           </div>
           <div class="stat">
             <span class="stat-value" id="stat-drafts">0</span>
-            <span class="stat-label">Oluşturulan Taslak</span>
+            <span class="stat-label" id="stat-drafts-label">Oluşturulan Taslak</span>
           </div>
         </div>
         <table class="leads-table">
@@ -126,8 +154,11 @@
           </thead>
           <tbody id="leads-tbody"></tbody>
         </table>
-        <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener" class="drafts-link">
+        <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener" class="drafts-link" id="gmail-drafts-link">
           Gmail Taslaklar klasörünü aç ↗
+        </a>
+        <a href="#" class="drafts-link hidden" id="excel-download-link">
+          Excel İndir (.xlsx) ↓
         </a>
       </section>
     </main>

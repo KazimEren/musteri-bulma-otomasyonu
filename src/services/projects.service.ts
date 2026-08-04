@@ -8,6 +8,7 @@ interface SearchProjectRow {
   target_location_hint: string | null;
   scale_filter: string;
   max_results_per_location: number | null;
+  output_type: string;
   created_at: string;
 }
 
@@ -19,6 +20,7 @@ function fromRow(row: SearchProjectRow): SearchProject {
     targetLocationHint: row.target_location_hint,
     scaleFilter: row.scale_filter as SearchProject["scaleFilter"],
     maxResultsPerLocation: row.max_results_per_location,
+    outputType: row.output_type as SearchProject["outputType"],
     createdAt: row.created_at,
   };
 }
@@ -35,6 +37,7 @@ export async function saveSearchProject(input: PipelineJobInput): Promise<void> 
     target_location_hint: input.targetLocationHint ?? null,
     scale_filter: input.scaleFilter ?? "all",
     max_results_per_location: input.maxResultsPerLocation ?? null,
+    output_type: input.outputType ?? "draft",
   });
 
   if (error) {

@@ -16,9 +16,12 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
    - Büyük ölçek → LinkedIn hattı: Apify ile karar verici kişi aranır, **LinkedIn şirket sayfasının web sitesi Google Maps'teki domain ile eşleşmiyorsa aday reddedilir** (`step4a-linkedin.ts`).
    - Küçük ölçek → Adım 4'te zaten kazınan web sitesi verisi kullanılır, ek bir Jina çağrısı yapılmaz (`step4b-webscrape.ts`).
 6. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
-7. **Gmail Taslak Motoru** — Kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`).
+7. **Çıktı** — kullanıcının seçtiği `outputType`'a göre üç moddan biri çalışır (`pipeline.worker.ts`):
+   - `draft` (varsayılan) — kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`); e-postası bulunamayan lead atlanır.
+   - `excel_info` — Gmail'e hiç gidilmez, e-posta taslağı da üretilmez (jet hızlı, az token); sonuç sadece şirket analizi + öneri olarak Excel'e hazır tutulur.
+   - `excel_full` — `excel_info`'ya ek olarak bir e-posta taslağı METNİ üretilir ama Gmail'e hiç gönderilmez/kaydedilmez, sadece Excel'in bir sütununa yazılır.
 
-Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir.
+Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir. Excel modlarında `result.leads`, e-postası bulunamayan lead'leri de içerir (e-posta hücresi boş kalır) — draft modunun aksine, e-posta zorunlu değildir.
 
 Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
 
@@ -28,9 +31,10 @@ Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linke
 
 - İstersen üstteki **"Geçmiş Projelerim / Aramalar"** menüsünden daha önce çalıştırdığın bir aramayı seç — proje açıklaması, hedef sektör/konum, şirket ölçeği ve sonuç limiti otomatik doldurulur; değiştirip yeniden başlatabilirsin,
 - Proje açıklamanı ve opsiyonel hedef sektör/konum ipuçlarını gir,
+- **Çıktı Türü**'nü seç: Gmail Taslak E-Posta (varsayılan) ya da Excel Çıktısı (.xlsx). Excel seçilirse hemen altında **Excel İçeriği** açılır: Sadece Şirket Bilgileri ve Öneriler, ya da Şirket Bilgileri + Hazır Mail Taslağı,
 - Şirket ölçeği filtresini (Tümü / Sadece Büyük / Sadece Küçük) seç,
 - "Pipeline'ı Başlat"a tıkla — adım adım ilerleme canlı olarak (3 saniyede bir `GET /pipeline/:jobId` sorgulanarak) gösterilir,
-- Tamamlandığında bulunan/daha önce taranmış (atlanan)/filtrelenen/taslak oluşturulan lead sayıları ve taslak listesi görüntülenir.
+- Tamamlandığında bulunan/daha önce taranmış (atlanan)/filtrelenen/oluşturulan lead sayıları ve sonuç listesi görüntülenir; Çıktı Türü'ne göre "Gmail Taslaklar klasörünü aç" ya da **"Excel İndir (.xlsx)"** bağlantısı gösterilir.
 
 Her `POST /pipeline` çağrısı otomatik olarak `search_projects` tablosuna kaydedilir — ayrıca bir "kaydet" adımı yok, her arama kendiliğinden geçmişe eklenir.
 
@@ -43,7 +47,7 @@ Worker (`npm run worker:dev`) ayrıca çalışıyor olmalı, aksi halde job kuyr
 
 ## Teknoloji Yığını
 
-Fastify · BullMQ + Redis · Google Gemini (`gemini-3.1-flash-lite`) · Apify (Google Maps, RAG web browser, LinkedIn profil/şirket detay actor'leri) · Jina.ai Reader · Supabase · Gmail API (OAuth2) · TypeScript
+Fastify · BullMQ + Redis · Google Gemini (`gemini-3.1-flash-lite`) · Apify (Google Maps, RAG web browser, LinkedIn profil/şirket detay actor'leri) · Jina.ai Reader · Supabase · Gmail API (OAuth2) · ExcelJS · TypeScript
 
 ## Kurulum
 
@@ -97,7 +101,8 @@ Content-Type: application/json
   "maxResultsPerLocation": 5,        // opsiyonel, varsayılan 20, üst sınır 50
   "targetSectorHint": "Avukatlar",   // opsiyonel, Adım 1'in sektör/keyword çıkarımına yön verir
   "targetLocationHint": "Kadıköy, İstanbul", // opsiyonel, Adım 1'in lokasyon çıkarımını buna sabitler
-  "scaleFilter": "small"             // opsiyonel: "all" (varsayılan) | "large" | "small"
+  "scaleFilter": "small",            // opsiyonel: "all" (varsayılan) | "large" | "small"
+  "outputType": "excel_full"         // opsiyonel: "draft" (varsayılan) | "excel_info" | "excel_full"
 }
 ```
 
@@ -111,7 +116,15 @@ GET /pipeline/:jobId
 
 → `{ "jobId", "state", "progress", "result", "failedReason" }`
 
-`result.leads`, sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır (ama Supabase'e `rejected` olarak kaydedilir, bkz. yukarıdaki Akış bölümü). `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsAlreadyKnown` dedup'ta atlanan (daha önce taranmış) sayıdır, `result.totalLeadsMatchingScale` dedup + `scaleFilter` uygulandıktan sonraki (Adım 5-7'ye giren) sayıdır.
+`outputType: "draft"` iken `result.leads` sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır (ama Supabase'e `rejected` olarak kaydedilir, bkz. yukarıdaki Akış bölümü). `excel_info`/`excel_full` modlarında e-posta zorunlu değildir, bulunamayan lead'ler de sonuca dahil edilir (e-posta hücresi boş kalır). `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsAlreadyKnown` dedup'ta atlanan (daha önce taranmış) sayıdır, `result.totalLeadsMatchingScale` dedup + `scaleFilter` uygulandıktan sonraki (Adım 5-7'ye giren) sayıdır.
+
+**Excel indir**
+
+```
+GET /pipeline/:jobId/download-excel
+```
+
+Job `completed` durumda değilse `409` döner. Aksi halde `result.leads`'i `.xlsx` olarak üretir ve `Content-Disposition: attachment` ile indirir. Sütunlar: Şirket Ölçeği, Şirket Adı, E-Posta Adresi, Şirketin Yaptığı İş, Şirkete Nasıl Bir İş Yapabiliriz?, ve (en az bir lead'in e-posta taslağı varsa) Özel E-Posta Taslağı (bkz. `src/services/excel.service.ts`). `outputType`'tan bağımsız olarak, herhangi bir tamamlanmış job için çalışır.
 
 **Geçmiş aramaları listele**
 
@@ -119,7 +132,7 @@ GET /pipeline/:jobId
 GET /projects
 ```
 
-→ `{ "projects": [{ "id", "projectDescription", "targetSectorHint", "targetLocationHint", "scaleFilter", "maxResultsPerLocation", "createdAt" }, ...] }`
+→ `{ "projects": [{ "id", "projectDescription", "targetSectorHint", "targetLocationHint", "scaleFilter", "maxResultsPerLocation", "outputType", "createdAt" }, ...] }`
 
 En son 20 arama, en yeniden en eskiye sıralı döner. Yerel arayüzdeki "Geçmiş Projelerim" menüsünü besler.
 
