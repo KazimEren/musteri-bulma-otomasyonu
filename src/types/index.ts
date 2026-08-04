@@ -84,6 +84,16 @@ export interface FinalizedLead extends AnalyzedLead {
   gmailDraftId: string;
 }
 
+// Adım 2b: dedup için Supabase "leads" tablosundaki kalıcı durum
+export type LeadPersistStatus = "processed" | "rejected";
+
+/**
+ * Bir lead'in kalıcı olarak (gelecekteki taramalarda da geçerli şekilde) elendiği sebep.
+ * NOT: scaleFilter uyuşmazlığı buraya dahil değil — o an seçilen filtreye özgüdür, kalıcı
+ * bir kusur değildir; bu yüzden dedup mekanizması bu sebeple hiç kayıt yazmaz (bkz. step3-router.ts).
+ */
+export type RejectionReason = "no_contact_email" | "linkedin_verification_failed" | "enrichment_failed";
+
 // Pipeline job giriş verisi (kullanıcının girdiği proje açıklaması)
 export interface PipelineJobInput {
   projectDescription: string;
@@ -98,7 +108,20 @@ export interface PipelineJobInput {
 
 export interface PipelineJobResult {
   totalLeadsFound: number;
+  /** Daha önce (herhangi bir geçmiş aramada) kalıcı olarak işlenmiş/elenmiş olduğu için Adım 3'e hiç sokulmayan lead sayısı. */
+  totalLeadsAlreadyKnown: number;
   totalLeadsMatchingScale: number;
   totalDraftsCreated: number;
   leads: FinalizedLead[];
+}
+
+// "Geçmiş Projelerim" listesi: her /pipeline çağrısında otomatik kaydedilen arama girdisi.
+export interface SearchProject {
+  id: string;
+  projectDescription: string;
+  targetSectorHint: string | null;
+  targetLocationHint: string | null;
+  scaleFilter: CompanyScale | "all";
+  maxResultsPerLocation: number | null;
+  createdAt: string;
 }

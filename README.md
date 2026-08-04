@@ -6,27 +6,33 @@ Repo: https://github.com/KazimEren/musteri-bulma-otomasyonu
 
 Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.md).
 
-## 6 Adımlı Akış
+## Akış
 
 1. **Dinamik Proje Analizi** — Gemini, proje açıklamasından hedef sektör/anahtar kelime/lokasyon çıkarır (`src/steps/step1-analyze.ts`).
 2. **Akıllı Filtreleme** — Apify üzerinden Google Maps araması yapılır; web sitesi olmayan işletmeler elenir, mükerrerler temizlenir (`step2-maps-search.ts`).
-3. **Şirket Ölçeği Ayrımı** — Google Maps yorum sayısına göre lead'ler büyük/küçük ölçek hattına yönlendirilir (`step3-router.ts`).
-4. **Ölçeğe Göre Veri Toplama**
+3. **Daha Önce Taranmış İşletmeleri Eleme (dedup)** — Supabase'deki `leads` tablosunda `place_id`, website domain'i veya normalize edilmiş isim+lokasyon eşleşmesiyle daha önce tam işlenmiş (`processed`) ya da kalıcı bir sebeple elenmiş (`rejected`) işletmeler ayıklanır; böylece tekrarlanan taramalarda aynı işletme için gereksiz Jina/LinkedIn/Gemini kredisi harcanmaz (`step2b-dedupe.ts`).
+4. **Şirket Ölçeği Ayrımı** — Kalan her lead'in web sitesi Jina.ai ile kazınır, Google Maps verisi + kazınan içerik Gemini'ye beslenerek 0-100 arası bir Kurumsallık Skoru üretilir; skor ve kullanıcının `scaleFilter` tercihine göre lead büyük/küçük ölçek hattına yönlendirilir ya da atlanır (`step3-router.ts`).
+5. **Ölçeğe Göre Veri Toplama**
    - Büyük ölçek → LinkedIn hattı: Apify ile karar verici kişi aranır, **LinkedIn şirket sayfasının web sitesi Google Maps'teki domain ile eşleşmiyorsa aday reddedilir** (`step4a-linkedin.ts`).
-   - Küçük ölçek → Web scraper hattı: Jina.ai ile site markdown'a çevrilir, e-posta çıkarılır (`step4b-webscrape.ts`).
-5. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
-6. **Gmail Taslak Motoru** — Kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`).
+   - Küçük ölçek → Adım 4'te zaten kazınan web sitesi verisi kullanılır, ek bir Jina çağrısı yapılmaz (`step4b-webscrape.ts`).
+6. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
+7. **Gmail Taslak Motoru** — Kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`).
 
 Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir.
+
+Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
 
 ## Yerel Arayüz
 
 `npm run dev` çalışırken `public/` altındaki statik dosyalar (`index.html`, `style.css`, `app.js`) Fastify tarafından otomatik servis edilir — ayrı bir frontend build/dev sunucusu gerekmez. Tarayıcıda **http://localhost:3000** adresine gidip:
 
+- İstersen üstteki **"Geçmiş Projelerim / Aramalar"** menüsünden daha önce çalıştırdığın bir aramayı seç — proje açıklaması, hedef sektör/konum, şirket ölçeği ve sonuç limiti otomatik doldurulur; değiştirip yeniden başlatabilirsin,
 - Proje açıklamanı ve opsiyonel hedef sektör/konum ipuçlarını gir,
 - Şirket ölçeği filtresini (Tümü / Sadece Büyük / Sadece Küçük) seç,
-- "Pipeline'ı Başlat"a tıkla — 6 adımlık ilerleme canlı olarak (3 saniyede bir `GET /pipeline/:jobId` sorgulanarak) gösterilir,
-- Tamamlandığında bulunan/filtrelenen/taslak oluşturulan lead sayıları ve taslak listesi görüntülenir.
+- "Pipeline'ı Başlat"a tıkla — adım adım ilerleme canlı olarak (3 saniyede bir `GET /pipeline/:jobId` sorgulanarak) gösterilir,
+- Tamamlandığında bulunan/daha önce taranmış (atlanan)/filtrelenen/taslak oluşturulan lead sayıları ve taslak listesi görüntülenir.
+
+Her `POST /pipeline` çağrısı otomatik olarak `search_projects` tablosuna kaydedilir — ayrıca bir "kaydet" adımı yok, her arama kendiliğinden geçmişe eklenir.
 
 Worker (`npm run worker:dev`) ayrıca çalışıyor olmalı, aksi halde job kuyrukta bekler ve arayüzde "Kuyrukta" durumunda takılı kalır.
 
@@ -53,7 +59,8 @@ cp .env.example .env
 | `REDIS_URL` | Kuyruk için Redis bağlantısı. Bulut Redis (ör. Upstash) kullanılıyorsa `rediss://` (TLS) şeması otomatik algılanır. |
 | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/)'dan alınır. Hesabında hangi model açıksa `src/services/gemini.service.ts`'deki varsayılan model adını ona göre güncelle. |
 | `APIFY_API_TOKEN` | Apify hesap token'ı. `APIFY_GOOGLE_MAPS_ACTOR_ID`, `APIFY_RAG_WEB_BROWSER_ACTOR_ID`, `APIFY_LINKEDIN_PROFILE_ACTOR_ID`, `APIFY_LINKEDIN_COMPANY_ACTOR_ID` actor'lerinin hesabında kiralı/erişilebilir olması gerekir. |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase projeni oluşturduktan sonra [`supabase/schema.sql`](./supabase/schema.sql)'i SQL Editor'de çalıştır. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase projeni oluşturduktan sonra [`supabase/schema.sql`](./supabase/schema.sql)'i SQL Editor'de çalıştır. Var olan bir veritabanını güncelliyorsan `supabase/migrations/` altındaki dosyaları da sırayla çalıştır. |
+| `SUPABASE_PROJECTS_TABLE` | "Geçmiş Projelerim" listesinin tutulduğu tablo, varsayılan `search_projects`. |
 | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_SENDER_EMAIL` | Google Cloud Console'da bir OAuth2 Client oluştur, [OAuth Playground](https://developers.google.com/oauthplayground) üzerinden `gmail.compose` scope'uyla refresh token al. `GMAIL_SENDER_EMAIL`, refresh token'ı aldığın hesabın adresiyle aynı olmalı. |
 
 `JINA_READER_BASE_URL` API key gerektirmez, olduğu gibi bırakılabilir.
@@ -104,7 +111,17 @@ GET /pipeline/:jobId
 
 → `{ "jobId", "state", "progress", "result", "failedReason" }`
 
-`result.leads`, sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır. `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsMatchingScale` `scaleFilter` uygulandıktan sonraki (Adım 4-6'ya giren) sayıdır.
+`result.leads`, sadece Gmail taslağı oluşturulan (yani e-postası doğrulanmış) lead'leri içerir; e-posta bulunamayan veya LinkedIn şirket kimliği doğrulanamayan lead'ler sessizce atlanır (ama Supabase'e `rejected` olarak kaydedilir, bkz. yukarıdaki Akış bölümü). `result.totalLeadsFound` Google Maps'ten gelen ham sayıdır, `result.totalLeadsAlreadyKnown` dedup'ta atlanan (daha önce taranmış) sayıdır, `result.totalLeadsMatchingScale` dedup + `scaleFilter` uygulandıktan sonraki (Adım 5-7'ye giren) sayıdır.
+
+**Geçmiş aramaları listele**
+
+```
+GET /projects
+```
+
+→ `{ "projects": [{ "id", "projectDescription", "targetSectorHint", "targetLocationHint", "scaleFilter", "maxResultsPerLocation", "createdAt" }, ...] }`
+
+En son 20 arama, en yeniden en eskiye sıralı döner. Yerel arayüzdeki "Geçmiş Projelerim" menüsünü besler.
 
 **Sağlık kontrolü**: `GET /health`
 

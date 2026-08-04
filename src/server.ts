@@ -6,6 +6,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { env } from "./config/env.js";
 import { pipelineRoutes } from "./routes/pipeline.routes.js";
+import { projectsRoutes } from "./routes/projects.routes.js";
 import { pipelineQueue } from "./queue/pipeline.queue.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ await app.register(fastifyStatic, {
   root: join(__dirname, "..", "public"),
 });
 await app.register(pipelineRoutes);
+await app.register(projectsRoutes);
 
 app.get("/health", async () => ({ status: "ok" }));
 

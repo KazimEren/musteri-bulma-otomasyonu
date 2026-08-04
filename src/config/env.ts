@@ -22,6 +22,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().min(1, "SUPABASE_URL zorunlu"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY zorunlu"),
   SUPABASE_LEADS_TABLE: z.string().default("leads"),
+  SUPABASE_PROJECTS_TABLE: z.string().default("search_projects"),
 
   GMAIL_CLIENT_ID: z.string().min(1, "GMAIL_CLIENT_ID zorunlu"),
   GMAIL_CLIENT_SECRET: z.string().min(1, "GMAIL_CLIENT_SECRET zorunlu"),

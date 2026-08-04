@@ -1,6 +1,7 @@
 import { apifyActors, runApifyActor } from "../services/apify.service.js";
 import { scrapeUrlToMarkdown } from "../services/jina.service.js";
 import { extractEmails } from "../utils/extract-emails.js";
+import { normalizeDomain } from "../utils/normalize.js";
 import type { LinkedInDecisionMaker, RoutedLead } from "../types/index.js";
 
 interface RagSearchItem {
@@ -26,16 +27,6 @@ const MAX_PROFILE_CANDIDATES = 3;
 
 async function searchLinkedIn(query: string, maxResults = 10): Promise<RagSearchItem[]> {
   return runApifyActor<RagSearchItem>(apifyActors.ragWebBrowser, { query, maxResults });
-}
-
-function normalizeDomain(url: string | undefined | null): string | null {
-  if (!url) return null;
-  try {
-    const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    return new URL(withProtocol).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
 }
 
 /** Referans: 2_linkedin_rehber.json → "Google Search for Company LinkedIn" + "Only Company Links". */

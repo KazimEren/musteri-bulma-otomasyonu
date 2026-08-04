@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { enqueuePipelineJob, pipelineQueue } from "../queue/pipeline.queue.js";
+import { saveSearchProject } from "../services/projects.service.js";
 
 const startPipelineSchema = z.object({
   projectDescription: z.string().min(10, "Proje açıklaması en az 10 karakter olmalı"),
@@ -15,6 +16,13 @@ export async function pipelineRoutes(app: FastifyInstance) {
     const parsed = startPipelineSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
+    }
+
+    try {
+      await saveSearchProject(parsed.data);
+    } catch (err) {
+      // Geçmiş kaydı başarısız olsa da pipeline'ı engelleme, sadece logla.
+      app.log.error(err);
     }
 
     const jobId = await enqueuePipelineJob(parsed.data);

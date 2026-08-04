@@ -16,9 +16,55 @@ const statusBadge = document.getElementById("status-badge");
 const statusDetail = document.getElementById("status-detail");
 const stepperItems = Array.from(document.querySelectorAll("#stepper li"));
 
-const STEP_ORDER = ["1", "2", "3", "4-6"];
+const STEP_ORDER = ["1", "2", "2b", "3", "4-6"];
+
+const historySelect = document.getElementById("historySelect");
 
 let pollTimer = null;
+
+function formatHistoryLabel(project) {
+  const date = new Date(project.createdAt);
+  const dateLabel = Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const shortDescription =
+    project.projectDescription.length > 60 ? project.projectDescription.slice(0, 60) + "…" : project.projectDescription;
+  return `${dateLabel} — ${shortDescription}`;
+}
+
+async function loadSearchHistory() {
+  try {
+    const res = await fetch("/projects");
+    if (!res.ok) return;
+    const { projects } = await res.json();
+    for (const project of projects ?? []) {
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = formatHistoryLabel(project);
+      option.dataset.project = JSON.stringify(project);
+      historySelect.appendChild(option);
+    }
+  } catch {
+    // Geçmiş yüklenemezse formu boş bırak; bu kritik bir hata değil.
+  }
+}
+
+historySelect.addEventListener("change", () => {
+  const selectedOption = historySelect.selectedOptions[0];
+  if (!selectedOption || !selectedOption.dataset.project) return;
+  const project = JSON.parse(selectedOption.dataset.project);
+
+  document.getElementById("projectDescription").value = project.projectDescription ?? "";
+  document.getElementById("targetSectorHint").value = project.targetSectorHint ?? "";
+  document.getElementById("targetLocationHint").value = project.targetLocationHint ?? "";
+  document.getElementById("maxResultsPerLocation").value = project.maxResultsPerLocation ?? 10;
+
+  const scaleValue = project.scaleFilter ?? "all";
+  const radio = form.querySelector(`input[name="scaleFilter"][value="${scaleValue}"]`);
+  if (radio) radio.checked = true;
+});
+
+loadSearchHistory();
 
 function showCard(el) {
   el.classList.remove("hidden");
@@ -69,6 +115,7 @@ function scaleLabel(scale) {
 
 function renderResults(result) {
   document.getElementById("stat-found").textContent = result.totalLeadsFound ?? 0;
+  document.getElementById("stat-known").textContent = result.totalLeadsAlreadyKnown ?? 0;
   document.getElementById("stat-matching").textContent = result.totalLeadsMatchingScale ?? 0;
   document.getElementById("stat-drafts").textContent = result.totalDraftsCreated ?? 0;
 

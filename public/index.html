@@ -15,6 +15,13 @@
 
     <main>
       <section class="card" id="form-card">
+        <div class="field history-field">
+          <span class="field-label">Geçmiş Projelerim / Aramalar <span class="optional">(opsiyonel)</span></span>
+          <select id="historySelect">
+            <option value="">— Geçmiş bir aramayı seç ve alanları otomatik doldur —</option>
+          </select>
+        </div>
+
         <form id="pipeline-form">
           <label class="field">
             <span class="field-label">Projeniz / Ürününüz <span class="required">*</span></span>
@@ -73,6 +80,7 @@
         <ol class="stepper" id="stepper">
           <li data-step="1"><span class="step-index">1</span><span class="step-label">Dinamik Proje Analizi</span></li>
           <li data-step="2"><span class="step-index">2</span><span class="step-label">Akıllı Filtreleme (Google Maps)</span></li>
+          <li data-step="2b"><span class="step-index">2b</span><span class="step-label">Daha Önce Taranmış İşletmeleri Eleme</span></li>
           <li data-step="3"><span class="step-index">3</span><span class="step-label">Şirket Ölçeği Ayrımı</span></li>
           <li data-step="4-6"><span class="step-index">4-6</span><span class="step-label">Veri Toplama + Analiz + Gmail Taslak</span></li>
         </ol>
@@ -93,6 +101,10 @@
           <div class="stat">
             <span class="stat-value" id="stat-found">0</span>
             <span class="stat-label">Bulunan Lead</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-known">0</span>
+            <span class="stat-label">Daha Önce Taranmış (Atlandı)</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="stat-matching">0</span>

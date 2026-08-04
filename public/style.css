@@ -124,7 +124,8 @@ small {
 
 textarea,
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+select {
   font: inherit;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -135,10 +136,17 @@ input[type="number"] {
 }
 
 textarea:focus,
-input:focus {
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.history-field {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px dashed var(--border);
 }
 
 .field-hint {
@@ -284,7 +292,7 @@ button[type="submit"]:disabled {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
