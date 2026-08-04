@@ -31,6 +31,7 @@ function toSupabaseRow(lead: AnalyzedLead) {
     reviews_count: lead.reviewsCount,
     maps_url: lead.mapsUrl,
     scale: lead.scale,
+    corporate_score: lead.corporateScore ?? null,
     contact_name: lead.linkedin?.fullName ?? null,
     contact_title: lead.linkedin?.title ?? null,
     contact_profile_url: lead.linkedin?.profileUrl ?? null,

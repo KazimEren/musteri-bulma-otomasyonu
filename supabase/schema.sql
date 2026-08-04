@@ -10,6 +10,7 @@ create table if not exists public.leads (
   reviews_count integer,
   maps_url text,
   scale text not null check (scale in ('large', 'small')),
+  corporate_score integer check (corporate_score is null or (corporate_score >= 0 and corporate_score <= 100)),
   contact_name text,
   contact_title text,
   contact_profile_url text,

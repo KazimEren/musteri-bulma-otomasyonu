@@ -13,10 +13,23 @@ export interface MapsLead {
   address: string;
   phone: string;
   website: string;
+  /**
+   * Apify'nin Maps verisinden doğrudan döndürebildiği e-posta (enrichment kapalıyken genelde boş).
+   * Adım 6'daki EmailDraft ile karışmaması için "mapsEmail" adlandırıldı.
+   */
+  mapsEmail?: string;
   rating: number;
   reviewsCount: number;
   mapsUrl: string;
   description: string;
+}
+
+// Adım 3/4: Jina.ai Reader ile kazınan web sitesi içeriği (artık HERKES için Adım 3'te toplanır)
+export interface WebScrapeResult {
+  url: string;
+  title: string;
+  markdown: string;
+  emails: string[];
 }
 
 // Adım 3: Router sonrası ölçek etiketi
@@ -24,6 +37,13 @@ export type CompanyScale = "large" | "small";
 
 export interface RoutedLead extends MapsLead {
   scale: CompanyScale;
+  /**
+   * Gemini'nin ürettiği 0-100 arası kurumsallık skoru. Web sitesi olmadığı için skorlama
+   * yapılamayan (direkt "small" kabul edilen) lead'lerde undefined kalır.
+   */
+  corporateScore?: number;
+  /** Adım 3'te toplanan zengin web sitesi bağlamı; Adım 4/5'e olduğu gibi taşınır. */
+  webScrape?: WebScrapeResult;
 }
 
 // Adım 4a: LinkedIn hattı çıktısı
@@ -37,18 +57,9 @@ export interface LinkedInDecisionMaker {
   companyData: Record<string, unknown>;
 }
 
-// Adım 4b: Web scraper (Jina) hattı çıktısı
-export interface WebScrapeResult {
-  url: string;
-  title: string;
-  markdown: string;
-  emails: string[];
-}
-
-// Adım 4 birleşik çıktı: hangi hat kullanıldıysa onun verisi dolu olur
+// Adım 4 birleşik çıktı: "large" için linkedin dolu olur, webScrape zaten Adım 3'ten miras gelir
 export interface EnrichedLead extends RoutedLead {
   linkedin?: LinkedInDecisionMaker;
-  webScrape?: WebScrapeResult;
 }
 
 // Adım 5: DIGITAL DETECTIVE analiz çıktısı

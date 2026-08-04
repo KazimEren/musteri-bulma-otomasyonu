@@ -6,7 +6,6 @@ import { analyzeProject } from "../steps/step1-analyze.js";
 import { searchGoogleMaps } from "../steps/step2-maps-search.js";
 import { routeByCompanyScale } from "../steps/step3-router.js";
 import { enrichViaLinkedIn } from "../steps/step4a-linkedin.js";
-import { enrichViaWebScrape } from "../steps/step4b-webscrape.js";
 import { analyzeLeadFit, saveLeadAnalysis } from "../steps/step5-analysis.js";
 import { createGmailDraft, draftColdEmail } from "../steps/step6-gmail-draft.js";
 import { mapWithConcurrency } from "../utils/concurrency.js";
@@ -18,8 +17,9 @@ async function enrichLead(lead: RoutedLead): Promise<EnrichedLead | null> {
       const linkedin = await enrichViaLinkedIn(lead);
       return { ...lead, linkedin };
     }
-    const webScrape = await enrichViaWebScrape(lead);
-    return { ...lead, webScrape };
+    // "small" ölçekli lead'lerin webScrape verisi Adım 3'te (kurumsallık skorlaması sırasında)
+    // zaten toplandı; burada tekrar kazımaya gerek yok, RoutedLead'i olduğu gibi zenginleştirilmiş kabul et.
+    return { ...lead };
   } catch {
     // Tek bir lead'in zenginleştirmesi başarısız olursa pipeline'ın tamamını düşürme.
     return null;
@@ -57,8 +57,8 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
   await job.updateProgress({ step: 2, label: "Akıllı Filtreleme (Google Maps)" });
   const mapsLeads = await searchGoogleMaps(analysis, maxResultsPerLocation);
 
-  await job.updateProgress({ step: 3, label: "Şirket Ölçeği Ayrımı" });
-  const routedLeads = routeByCompanyScale(mapsLeads).filter((lead) => scaleFilter === "all" || lead.scale === scaleFilter);
+  await job.updateProgress({ step: 3, label: "Şirket Ölçeği Ayrımı (Kurumsallık Skorlaması)" });
+  const routedLeads = await routeByCompanyScale(mapsLeads, scaleFilter);
 
   await job.updateProgress({ step: "4-6", label: "Veri Toplama + Analiz + Gmail Taslak" });
   const results = await mapWithConcurrency(routedLeads, env.LEAD_PROCESSING_CONCURRENCY, (lead) =>

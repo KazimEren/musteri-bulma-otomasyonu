@@ -146,8 +146,12 @@ export async function enrichViaLinkedIn(lead: RoutedLead): Promise<LinkedInDecis
   const basicInfo = getBasicInfo(profileData);
 
   let email = extractProfileEmail(profileData);
+  if (!email) {
+    // LinkedIn genelde e-posta paylaşmaz; önce Adım 3'te zaten kazınan web sitesi verisine bak.
+    email = lead.webScrape?.emails[0];
+  }
   if (!email && lead.website) {
-    // LinkedIn genelde e-posta paylaşmaz; fallback olarak şirket web sitesinden e-posta dene.
+    // webScrape verisi herhangi bir sebeple yoksa (kazıma başarısız olmuş olabilir) son çare olarak dene.
     try {
       const { markdown } = await scrapeUrlToMarkdown(lead.website);
       email = extractEmails(markdown)[0];

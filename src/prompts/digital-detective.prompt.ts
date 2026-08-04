@@ -6,9 +6,25 @@ import type { EnrichedLead } from "../types/index.js";
  * tek bir yapılandırılmış JSON çıktısı üretecek şekilde sadeleştirildi.
  */
 export function buildDigitalDetectivePrompt(projectDescription: string, lead: EnrichedLead): string {
-  const evidence = lead.linkedin
-    ? `LinkedIn kişi verisi:\n${JSON.stringify(lead.linkedin.profileData)}\n\nLinkedIn şirket verisi:\n${JSON.stringify(lead.linkedin.companyData)}`
-    : `Web sitesi içeriği (markdown, ilk 6000 karakter):\n${(lead.webScrape?.markdown ?? "").slice(0, 6000) || "veri yok"}`;
+  const evidenceParts: string[] = [];
+
+  if (lead.linkedin) {
+    evidenceParts.push(
+      `LinkedIn kişi verisi:\n${JSON.stringify(lead.linkedin.profileData)}\n\nLinkedIn şirket verisi:\n${JSON.stringify(lead.linkedin.companyData)}`,
+    );
+  }
+
+  // Adım 3'te HERKES için toplanan zengin web sitesi bağlamı; "large" (LinkedIn) hattında da
+  // ek bağlam olarak, "small" hattında ise tek kanıt kaynağı olarak kullanılır.
+  if (lead.webScrape?.markdown) {
+    evidenceParts.push(`Web sitesi içeriği (markdown, ilk 6000 karakter):\n${lead.webScrape.markdown.slice(0, 6000)}`);
+  }
+
+  if (typeof lead.corporateScore === "number") {
+    evidenceParts.push(`Kurumsallık skoru (0-100, Adım 3 LLM skorlaması): ${lead.corporateScore}`);
+  }
+
+  const evidence = evidenceParts.length > 0 ? evidenceParts.join("\n\n") : "veri yok";
 
   return `# DIGITAL DETECTIVE: Kanıta Dayalı Lead Profilleme
 
