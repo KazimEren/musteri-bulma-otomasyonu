@@ -47,31 +47,33 @@
             </label>
           </div>
 
-          <div class="field">
-            <span class="field-label">Çıktı Türü</span>
-            <div class="radio-group" id="outputTypeGroup">
-              <label class="radio-option">
-                <input type="radio" name="outputTypeMode" value="draft" checked />
-                <span>Gmail Taslak E-Posta <small>(varsayılan)</small></span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="outputTypeMode" value="excel" />
-                <span>Excel Çıktısı <small>(.xlsx)</small></span>
-              </label>
+          <div class="field-row output-type-row">
+            <div class="field">
+              <span class="field-label">Çıktı Türü</span>
+              <div class="radio-group" id="outputTypeGroup">
+                <label class="radio-option">
+                  <input type="radio" name="outputTypeMode" value="draft" checked />
+                  <span>Gmail Taslak E-Posta <small>(varsayılan)</small></span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="outputTypeMode" value="excel" />
+                  <span>Excel Çıktısı <small>(.xlsx)</small></span>
+                </label>
+              </div>
             </div>
-          </div>
 
-          <div class="field hidden" id="excelContentField">
-            <span class="field-label">Excel İçeriği</span>
-            <div class="radio-group" id="excelContentGroup">
-              <label class="radio-option">
-                <input type="radio" name="excelContentType" value="excel_info" checked />
-                <span>Sadece Şirket Bilgileri ve Öneriler</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="excelContentType" value="excel_full" />
-                <span>Şirket Bilgileri + Hazır Mail Taslağı</span>
-              </label>
+            <div class="field hidden" id="excelContentField">
+              <span class="field-label">Excel İçeriği</span>
+              <div class="radio-group" id="excelContentGroup">
+                <label class="radio-option">
+                  <input type="radio" name="excelContentType" value="excel_info" checked />
+                  <span>Sadece Şirket Bilgileri ve Öneriler</span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="excelContentType" value="excel_full" />
+                  <span>Şirket Bilgileri + Hazır Mail Taslağı</span>
+                </label>
+              </div>
             </div>
           </div>
 

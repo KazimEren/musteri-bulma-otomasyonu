@@ -102,6 +102,10 @@ body {
   gap: 16px;
 }
 
+.output-type-row {
+  align-items: start;
+}
+
 .field-narrow {
   max-width: 260px;
 }
