@@ -32,6 +32,25 @@ export interface WebScrapeResult {
   emails: string[];
 }
 
+// Adım 3a: E-Posta Önceliklendirme (Gemini'ye gitmeden ÖNCE, sadece kazınan/Maps e-postalarından
+// belirlenir — bkz. src/utils/email-priority.ts). "primary" = en az bir kişisel/departman e-postası
+// (isim@, sales@, export@, contact@ vb.), "fallback" = sadece genel bilgi/santral tipi (info@ vb.).
+export type EmailPriority = "primary" | "fallback";
+
+/**
+ * Adım 3'ün ucuz (Gemini'siz) ön taraması: Tier 4 filtresi + web kazıma + e-posta önceliklendirmesinden
+ * geçmiş ama henüz kurumsallık skorlaması (Gemini) yapılmamış lead (bkz. step3-router.ts → screenLead).
+ * `emailPriority` "none" ise (webScrape'te de mapsEmail'de de) hiç e-posta bulunamadı demektir.
+ * pipeline.worker.ts bu üçünü öncelik sırasına (primary → fallback → none) göre işleyerek, hedef lead
+ * sayısı zaten Birincil maillerle dolduysa Son Çare/mailsiz adaylar için Gemini'yi hiç çağırmaz
+ * (bkz. routeScreenedLead) — kredi tasarrufu.
+ */
+export interface ScreenedLead {
+  lead: MapsLead;
+  webScrape?: WebScrapeResult;
+  emailPriority: EmailPriority | "none";
+}
+
 // Adım 3: Router sonrası ölçek etiketi
 export type CompanyScale = "large" | "small";
 
@@ -39,7 +58,7 @@ export type CompanyScale = "large" | "small";
  * 4 kademeli (4-Tier) kurumsallık skorlamasındaki ayrıntılı katman (bkz. step3-router.ts):
  * 1 = Kesin Büyük Ölçek (45-100), 2 = Potansiyel Büyük/Güçlü KOBİ (30-44, "large" için esnek
  * yedek havuz), 3 = Sağlıklı Küçük İşletme (15-29). Tier 4 (Çöp/Yetersiz Veri, 0-14) hiçbir zaman
- * RoutedLead'e ulaşmaz — routeSingleLead() o durumda null döner (pipeline'a hiç girmez).
+ * RoutedLead'e ulaşmaz — routeScreenedLead() o durumda null döner (pipeline'a hiç girmez).
  */
 export type CompanyTier = 1 | 2 | 3;
 

@@ -6,22 +6,23 @@ import type {
   CompanyScale,
   EnrichedLead,
   FinalizedLead,
-  MapsLead,
   OutputType,
   PipelineJobInput,
   PipelineJobResult,
   RejectionReason,
   RoutedLead,
+  ScreenedLead,
 } from "../types/index.js";
 import { analyzeProject } from "../steps/step1-analyze.js";
 import { searchGoogleMaps } from "../steps/step2-maps-search.js";
 import { filterAlreadyKnownLeads } from "../steps/step2b-dedupe.js";
-import { routeSingleLead } from "../steps/step3-router.js";
+import { screenLead, routeScreenedLead } from "../steps/step3-router.js";
 import { enrichViaLinkedIn } from "../steps/step4a-linkedin.js";
 import { analyzeLeadFit, saveLeadAnalysis, saveRejectedLead } from "../steps/step5-analysis.js";
 import { createGmailDraft, draftColdEmail } from "../steps/step6-gmail-draft.js";
-import { mapWithEarlyExit } from "../utils/concurrency.js";
+import { mapWithConcurrency, mapWithEarlyExit } from "../utils/concurrency.js";
 import { normalizeSector } from "../utils/normalize.js";
+import { pickBestEmail } from "../utils/email-priority.js";
 import { env } from "../config/env.js";
 import { GeminiQuotaExceededError } from "../services/gemini.service.js";
 
@@ -57,7 +58,7 @@ function errMessage(err: unknown): string {
  */
 async function enrichLead(lead: RoutedLead, sectorContext: string | null): Promise<EnrichedLead | null> {
   if (lead.scale !== "large") {
-    // "small" ölçekli lead'lerin webScrape verisi routeSingleLead() içinde zaten toplandı.
+    // "small" ölçekli lead'lerin webScrape verisi screenLead() içinde zaten toplandı.
     return { ...lead };
   }
 
@@ -81,14 +82,17 @@ async function enrichLead(lead: RoutedLead, sectorContext: string | null): Promi
 }
 
 interface RunStats {
-  /** routeSingleLead() içindeki şirket ölçeği ayrımından geçen (scaleFilter'a uyan) aday sayısı. */
+  /** routeScreenedLead() içindeki şirket ölçeği ayrımından geçen (scaleFilter'a uyan) aday sayısı. */
   totalLeadsMatchingScale: number;
 }
 
 /**
- * Tek bir Maps adayını uçtan uca işler: ölçek ayrımı → zenginleştirme → geçerli e-posta kontrolü →
- * analiz → kayıt → (gerekiyorsa) taslak. Hedeflenen geçerli lead sayısına ulaşana kadar aday havuzunu
- * teker teker (mapWithEarlyExit ile erken çıkış destekli) işleyen ana döngü tarafından çağrılır.
+ * Taranmış (screenLead() geçmiş) TEK bir adayı uçtan uca işler: karma skorlama/ölçek ayrımı →
+ * zenginleştirme → geçerli e-posta kontrolü → analiz → kayıt → (gerekiyorsa) taslak. Hedeflenen
+ * geçerli lead sayısına ulaşana kadar öncelik sırasına (primary → fallback → none, bkz. runPipeline)
+ * dizilmiş aday havuzunu teker teker (mapWithEarlyExit ile erken çıkış destekli) işleyen ana döngü
+ * tarafından çağrılır — bu sıralama sayesinde hedef zaten Birincil maillerle dolduysa Son Çare/mailsiz
+ * adaylar için routeScreenedLead()'in Gemini çağrısı hiç tetiklenmez.
  *
  * E-postası bulunamayan/doğrulanamayan lead, çıktı türünden bağımsız olarak Gemini'ye (analiz/öneri/
  * taslak üretimine) HİÇ gitmeden pes edilmeden bir SONRAKİ adaya geçilir (null döner) — hem gereksiz
@@ -96,22 +100,25 @@ interface RunStats {
  */
 async function processCandidate(
   projectDescription: string,
-  mapsLead: MapsLead,
+  screened: ScreenedLead,
   scaleFilter: CompanyScale | "all",
   outputType: OutputType,
   stats: RunStats,
   sectorContext: string | null,
 ): Promise<FinalizedLead | null> {
-  const routed = await routeSingleLead(mapsLead, scaleFilter);
+  const routed = await routeScreenedLead(screened, scaleFilter);
   if (!routed) return null;
   stats.totalLeadsMatchingScale += 1;
 
   const enriched = await enrichLead(routed, sectorContext);
   if (!enriched) return null;
 
-  // Derin web taramasında (ve LinkedIn'de) mail bulunamazsa son çare olarak Google Maps/Apify
-  // verisinde doğrudan gelen e-postaya (mapsEmail) bakılır — bu, ayrı bir kazıma gerektirmez.
-  const contactEmail = enriched.linkedin?.email ?? enriched.webScrape?.emails[0] ?? enriched.mapsEmail;
+  // Akıllı Mail Önceliklendirme: LinkedIn'den doğrulanmış kişisel e-posta her zaman önceliklidir.
+  // Yoksa web sitesinde kazınan e-postalar + Google Maps/Apify'nin doğrudan verdiği e-posta
+  // (mapsEmail) birlikte değerlendirilip aralarından Birincil (kişisel/departman) olan varsa o,
+  // yoksa (hepsi genel bilgi/santral tipiyse) ilk aday Son Çare olarak seçilir (bkz. email-priority.ts).
+  const scrapedCandidates = [...(enriched.webScrape?.emails ?? []), ...(enriched.mapsEmail ? [enriched.mapsEmail] : [])];
+  const contactEmail = enriched.linkedin?.email ?? pickBestEmail(scrapedCandidates)?.email;
   if (!contactEmail) {
     console.warn(`[MAIL_FILTER_REJECTED] ${enriched.title}: geçerli e-posta hiçbir kaynakta (web sitesi, LinkedIn, Maps) bulunamadı`);
     await saveRejectedLead(enriched, "no_contact_email", sectorContext, { linkedin: enriched.linkedin }).catch(logSaveError);
@@ -210,15 +217,30 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
     const newUnknownLeads = await filterAlreadyKnownLeads(newMapsLeads, sectorContext);
     totalLeadsAlreadyKnown += newMapsLeads.length - newUnknownLeads.length;
 
-    await job.updateProgress({ step: "3", label: "Şirket Ölçeği Ayrımı (Kurumsallık Skorlaması)" });
+    // Adım 3a (ucuz, Gemini'siz): TÜM adaylar için web kazıma + e-posta önceliklendirmesi.
+    await job.updateProgress({ step: "3", label: "Akıllı Mail Önceliklendirme (Web Kazıma)" });
+    const screened = (
+      await mapWithConcurrency(newUnknownLeads, env.LEAD_PROCESSING_CONCURRENCY, screenLead)
+    ).filter((s): s is ScreenedLead => s !== null);
+
+    // Birincil (kişisel/departman) mailli adaylar önce, Son Çare (sadece info@ vb.) adaylar sonra,
+    // hiç e-postası bulunamayanlar en son işlenir (Array.sort kararlı, aynı öncelik içindeki sıra
+    // korunur). mapWithEarlyExit hedefe ulaşınca yeni öğe dağıtmayı durdurduğu için, hedef zaten
+    // Birincil maillerle dolduysa Son Çare/mailsiz adaylar için Adım 3b'nin (kurumsallık skorlaması)
+    // ve Adım 5'in (DIGITAL DETECTIVE) Gemini çağrıları HİÇ tetiklenmez — kredi tasarrufu.
+    const EMAIL_PRIORITY_RANK: Record<ScreenedLead["emailPriority"], number> = { primary: 0, fallback: 1, none: 2 };
+    const orderedScreened = [...screened].sort(
+      (a, b) => EMAIL_PRIORITY_RANK[a.emailPriority] - EMAIL_PRIORITY_RANK[b.emailPriority],
+    );
+
     await job.updateProgress({
       step: "4-6",
-      label: outputType === "draft" ? "Veri Toplama + Analiz + Gmail Taslak" : "Veri Toplama + Analiz",
+      label: outputType === "draft" ? "Kurumsallık Skorlaması + Analiz + Gmail Taslak" : "Kurumsallık Skorlaması + Analiz",
     });
 
     const remaining = targetValidLeads - finalizedLeads.length;
-    const stageResults = await mapWithEarlyExit(newUnknownLeads, env.LEAD_PROCESSING_CONCURRENCY, remaining, (lead) =>
-      processCandidate(projectDescription, lead, scaleFilter, outputType, stats, sectorContext),
+    const stageResults = await mapWithEarlyExit(orderedScreened, env.LEAD_PROCESSING_CONCURRENCY, remaining, (screenedLead) =>
+      processCandidate(projectDescription, screenedLead, scaleFilter, outputType, stats, sectorContext),
     );
     finalizedLeads.push(...stageResults);
 

@@ -1,19 +1,27 @@
-import type { CompanyScale, CompanyTier, MapsLead, RoutedLead, WebScrapeResult } from "../types/index.js";
+import type { CompanyScale, CompanyTier, MapsLead, RoutedLead, ScreenedLead, WebScrapeResult } from "../types/index.js";
 import { generateJson } from "../services/gemini.service.js";
 import { buildCorporateScorePrompt } from "../prompts/corporate-score.prompt.js";
 import { scrapeCompanyWebsite } from "./step4b-webscrape.js";
 import { PUBLIC_EMAIL_DOMAINS } from "../utils/email-domains.js";
+import { pickBestEmail } from "../utils/email-priority.js";
 
 /**
- * Adım 3: Şirket Ölçeği Ayrımı (4 Kademeli / 4-Tier Dinamik Skorlama)
+ * Adım 3: Şirket Ölçeği Ayrımı (4 Kademeli / 4-Tier Dinamik Skorlama) + E-Posta Önceliklendirme
  *
- * 1. Tier 4 Ön Filtresi: web sitesi, iletişim bilgisi (e-posta/telefon) ve Maps operasyonel sinyali
- *    (yorum) hiç yoksa lead hiçbir kazıma/LLM çağrısı yapılmadan direkt elenir — API kredisi harcanmaz.
- * 2. Herkes İçin Detaylı Kazıma: web sitesi olan lead'ler Jina.ai ile markdown'a çevrilir.
- * 3. Karma Skorlama (0-100): E-Posta/Domain (25), Maps Operasyonel Varlık (15) ve LinkedIn sinyali (15)
- *    kod tarafında deterministik hesaplanır; Çok Dilli/Kataloglu Web Sitesi (25) ve Ürün/Sertifika/
- *    Tesis (20) — gerçek muhakeme gerektirdiği için — Gemini'ye bırakılır.
- * 4. Karar & Yönlendirme: toplam skora göre Tier 1-4 belirlenir. Tier 4 direkt elenir; Tier 1/2
+ * İKİ FAZA AYRILIR (bkz. pipeline.worker.ts): screenLead() (3a, ucuz/Gemini'siz) TÜM adaylar için
+ * çalıştırılıp emailPriority'ye (primary → fallback → none) göre sıralanır; routeScreenedLead()
+ * (3b, pahalı/Gemini'li) ise sadece hedef lead sayısına ulaşmak için gereken kadarına, öncelik
+ * sırasıyla uygulanır. Böylece hedef zaten Birincil (kişisel/departman) mailli lead'lerle dolduysa,
+ * Son Çare (sadece info@ vb.) veya hiç e-postası olmayan adaylar için Gemini hiç çağrılmaz.
+ *
+ * 1. Tier 4 Ön Filtresi (3a): web sitesi, iletişim bilgisi (e-posta/telefon) ve Maps operasyonel
+ *    sinyali (yorum) hiç yoksa lead hiçbir kazıma/LLM çağrısı yapılmadan direkt elenir.
+ * 2. Herkes İçin Detaylı Kazıma + E-Posta Önceliklendirme (3a): web sitesi olan lead'ler Jina.ai ile
+ *    markdown'a çevrilir, bulunan e-postalar (+ varsa mapsEmail) Birincil/Son Çare olarak etiketlenir.
+ * 3. Karma Skorlama (3b, 0-100): E-Posta/Domain (25), Maps Operasyonel Varlık (15) ve LinkedIn sinyali
+ *    (15) kod tarafında deterministik hesaplanır; Çok Dilli/Kataloglu Web Sitesi (25) ve Ürün/
+ *    Sertifika/Tesis (20) — gerçek muhakeme gerektirdiği için — Gemini'ye bırakılır.
+ * 4. Karar & Yönlendirme (3b): toplam skora göre Tier 1-4 belirlenir. Tier 4 direkt elenir; Tier 1/2
  *    "large" (Derin Tarama + LinkedIn), Tier 3 "small" (Hızlı Tarama) olarak etiketlenir. Kullanıcının
  *    scaleFilter tercihiyle çelişen lead'ler de atlanır.
  */
@@ -123,19 +131,18 @@ async function scoreLead(lead: MapsLead, webScrape?: WebScrapeResult): Promise<n
 }
 
 /**
- * Tek bir lead'i yeni akışa göre işler; kullanıcı tercihiyle çelişirse ya da Tier 4 (çöp) çıkarsa
- * null döner (SKIP/DROP). pipeline.worker.ts'teki hedeflenen geçerli lead sayısına ulaşana kadar aday
- * havuzunu teker teker (erken çıkış destekli) işleyen döngü tarafından da doğrudan çağrılır; bu yüzden
- * dışa açık.
+ * Adım 3a (ucuz, Gemini'siz): Tier 4 ön filtresi + web kazıma + e-posta önceliklendirmesi. Hiçbir
+ * sinyal yoksa (Tier 4 çöp) null döner. pipeline.worker.ts TÜM adaylar için bunu önce çalıştırır,
+ * sonra emailPriority'ye göre sıralayıp sadece gereken kadarını routeScreenedLead()'e sokar.
  */
-export async function routeSingleLead(lead: MapsLead, scaleFilter: CompanyScale | "all"): Promise<RoutedLead | null> {
+export async function screenLead(lead: MapsLead): Promise<ScreenedLead | null> {
   // 1) Tier 4 Ön Filtresi: hiçbir sinyal yoksa hiç işlem yapmadan atla.
   if (isObviouslyGarbage(lead)) {
     return null;
   }
 
   // 2) Web sitesi varsa Herkes İçin Detaylı Kazıma (Jina.ai).
-  let webScrape: RoutedLead["webScrape"];
+  let webScrape: WebScrapeResult | undefined;
   if (lead.website) {
     try {
       webScrape = await scrapeCompanyWebsite(lead.website, lead.title);
@@ -144,11 +151,24 @@ export async function routeSingleLead(lead: MapsLead, scaleFilter: CompanyScale 
     }
   }
 
-  // 3) Karma Skorlama.
+  // 3) E-Posta Önceliklendirme: mapsEmail + webScrape'teki tüm adaylardan en iyisi seçilir.
+  const best = pickBestEmail(collectCandidateEmails(lead, webScrape));
+
+  return { lead, webScrape, emailPriority: best?.priority ?? "none" };
+}
+
+/**
+ * Adım 3b (pahalı, Gemini'li): screenLead()'in topladığı web kazıma verisiyle asıl karma skorlamayı
+ * yapıp Tier/scale kararını verir; kullanıcı tercihiyle çelişirse ya da Tier 4 çıkarsa null döner.
+ * Sadece öncelik sıralamasında hedefe dahil edilen (bkz. pipeline.worker.ts) taranmış lead'ler için
+ * çağrılır — böylece gereksiz Son Çare/mailsiz adaylar için Gemini kredisi harcanmaz.
+ */
+export async function routeScreenedLead(screened: ScreenedLead, scaleFilter: CompanyScale | "all"): Promise<RoutedLead | null> {
+  const { lead, webScrape } = screened;
+
   const corporateScore = await scoreLead(lead, webScrape);
   const tier = scoreToTier(corporateScore);
 
-  // 4) Karar & Yönlendirme.
   if (tier === 4) {
     console.warn(
       `[TIER4_DROPPED] ${lead.title}: skor ${corporateScore} (Tier 3 eşiği ${MIN_QUALIFIED_LEAD_SCORE}'in altı) — pipeline'a hiç alınmadan elendi`,
