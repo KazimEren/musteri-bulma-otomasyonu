@@ -10,6 +10,10 @@ create table if not exists public.leads (
   -- taramalarda place_id dışında website domain'i veya isim+lokasyon eşleşmesiyle de tanınabilir.
   website_domain text,
   name_location_key text,
+  -- Sektör bazlı eleme/geçmiş kontrolü için: bu satırın hangi hedef sektör bağlamında
+  -- taranıp/işlendiğini/reddedildiğini tutar (bkz. src/utils/normalize.ts → normalizeSector).
+  -- NULL ise sektörden bağımsız (her sektörde geçerli) "bilinen" sayılır (bkz. step2b-dedupe.ts).
+  sector_context text,
   rating numeric,
   reviews_count integer,
   maps_url text,
@@ -36,6 +40,7 @@ create table if not exists public.leads (
 create index if not exists leads_scale_idx on public.leads (scale);
 create index if not exists leads_website_domain_idx on public.leads (website_domain);
 create index if not exists leads_name_location_key_idx on public.leads (name_location_key);
+create index if not exists leads_sector_context_idx on public.leads (sector_context);
 
 -- Adım 1 girdisini geçmiş arama olarak saklar; frontend'deki "Geçmiş Projelerim" listesini besler
 -- (bkz. src/services/projects.service.ts, src/routes/projects.routes.ts).
@@ -47,7 +52,11 @@ create table if not exists public.search_projects (
   scale_filter text not null default 'all' check (scale_filter in ('all', 'large', 'small')),
   max_results_per_location integer,
   output_type text not null default 'draft' check (output_type in ('draft', 'excel_info', 'excel_full')),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Kullanıcı mevcut bir projede sektör/arama alanlarını güncellediğinde (yeni satır açmadan)
+  -- değişir; "Geçmiş Projelerim" listesi buna göre sıralanır (bkz. projects.service.ts).
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists search_projects_created_at_idx on public.search_projects (created_at desc);
+create index if not exists search_projects_updated_at_idx on public.search_projects (updated_at desc);

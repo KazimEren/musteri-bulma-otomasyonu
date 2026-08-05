@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { enqueuePipelineJob, pipelineQueue } from "../queue/pipeline.queue.js";
-import { saveSearchProject } from "../services/projects.service.js";
+import { upsertSearchProject } from "../services/projects.service.js";
 import { buildLeadsWorkbook } from "../services/excel.service.js";
 import type { PipelineJobResult } from "../types/index.js";
 
@@ -12,6 +12,10 @@ const startPipelineSchema = z.object({
   targetLocationHint: z.string().min(1).optional(),
   scaleFilter: z.enum(["all", "large", "small"]).optional(),
   outputType: z.enum(["draft", "excel_info", "excel_full"]).optional(),
+  // Kullanıcı "Geçmiş Projelerim"den seçtiği (veya aynı oturumda daha önce başlattığı) bir projede
+  // sektör/arama alanını değiştirip tekrar aradığında gönderilir; yeni bir proje kaydı açmak yerine
+  // aynı search_projects satırı güncellenir (bkz. projects.service.ts → upsertSearchProject).
+  projectId: z.string().uuid().optional(),
 });
 
 export async function pipelineRoutes(app: FastifyInstance) {
@@ -21,15 +25,18 @@ export async function pipelineRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: parsed.error.flatten() });
     }
 
+    const { projectId: existingProjectId, ...jobInput } = parsed.data;
+
+    let projectId: string | undefined;
     try {
-      await saveSearchProject(parsed.data);
+      projectId = await upsertSearchProject(jobInput, existingProjectId);
     } catch (err) {
       // Geçmiş kaydı başarısız olsa da pipeline'ı engelleme, sadece logla.
       app.log.error(err);
     }
 
-    const jobId = await enqueuePipelineJob(parsed.data);
-    return reply.status(202).send({ jobId });
+    const jobId = await enqueuePipelineJob(jobInput);
+    return reply.status(202).send({ jobId, projectId: projectId ?? null });
   });
 
   app.get<{ Params: { jobId: string } }>("/pipeline/:jobId", async (request, reply) => {

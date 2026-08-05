@@ -23,10 +23,31 @@ const excelContentField = document.getElementById("excelContentField");
 const gmailDraftsLink = document.getElementById("gmail-drafts-link");
 const excelDownloadLink = document.getElementById("excel-download-link");
 const statDraftsLabel = document.getElementById("stat-drafts-label");
+const activeProjectNote = document.getElementById("activeProjectNote");
+const newProjectBtn = document.getElementById("newProjectBtn");
 
 let pollTimer = null;
 let currentJobId = null;
 let lastOutputType = "draft";
+// Kullanıcı mevcut bir projede sektör/arama alanını değiştirip tekrar aradığında aynı proje
+// kaydının güncellenmesi (yeni bir proje açılmaması) için hangi projenin "açık" olduğunu tutar.
+// Geçmişten seçilince veya bir arama başarıyla başlatılınca set edilir; "Yeni Proje Başlat" ile
+// veya boş geçmiş seçeneğiyle sıfırlanır (bkz. PROJE GÜNCELLEMESİ isteği).
+let activeProjectId = null;
+
+function setActiveProject(projectId) {
+  activeProjectId = projectId;
+  if (activeProjectId) {
+    activeProjectNote.classList.remove("hidden");
+  } else {
+    activeProjectNote.classList.add("hidden");
+  }
+}
+
+newProjectBtn.addEventListener("click", () => {
+  historySelect.value = "";
+  setActiveProject(null);
+});
 
 function getOutputTypeMode() {
   return form.querySelector('input[name="outputTypeMode"]:checked')?.value ?? "draft";
@@ -59,6 +80,11 @@ async function loadSearchHistory() {
     const res = await fetch("/projects");
     if (!res.ok) return;
     const { projects } = await res.json();
+    // Sadece geçmişten dinamik eklenen seçenekleri temizle, ilk (boş/"yeni") seçeneği koru —
+    // bir proje güncellendikten sonra listeyi tazelemek için de çağrılır (bkz. submit handler).
+    Array.from(historySelect.options)
+      .slice(1)
+      .forEach((option) => option.remove());
     for (const project of projects ?? []) {
       const option = document.createElement("option");
       option.value = project.id;
@@ -73,8 +99,12 @@ async function loadSearchHistory() {
 
 historySelect.addEventListener("change", () => {
   const selectedOption = historySelect.selectedOptions[0];
-  if (!selectedOption || !selectedOption.dataset.project) return;
+  if (!selectedOption || !selectedOption.dataset.project) {
+    setActiveProject(null);
+    return;
+  }
   const project = JSON.parse(selectedOption.dataset.project);
+  setActiveProject(project.id);
 
   document.getElementById("projectDescription").value = project.projectDescription ?? "";
   document.getElementById("targetSectorHint").value = project.targetSectorHint ?? "";
@@ -264,6 +294,11 @@ form.addEventListener("submit", async (event) => {
   if (outputType !== "draft") payload.outputType = outputType;
   lastOutputType = outputType;
 
+  // Mevcut bir proje düzenleniyorsa (geçmişten seçildi ya da bu oturumda daha önce başlatıldı),
+  // sektör/arama alanları değişmiş olsa bile yeni bir proje kaydı açılmaması için id gönderilir
+  // (bkz. PROJE GÜNCELLEMESİ isteği, projects.service.ts → upsertSearchProject).
+  if (activeProjectId) payload.projectId = activeProjectId;
+
   try {
     const res = await fetch("/pipeline", {
       method: "POST",
@@ -276,8 +311,14 @@ form.addEventListener("submit", async (event) => {
       throw new Error(errBody?.error?.formErrors?.join(", ") || `İstek başarısız: ${res.status}`);
     }
 
-    const { jobId } = await res.json();
+    const { jobId, projectId } = await res.json();
     currentJobId = jobId;
+    if (projectId) {
+      setActiveProject(projectId);
+      loadSearchHistory().then(() => {
+        historySelect.value = projectId;
+      });
+    }
     pollTimer = setInterval(() => pollJob(jobId), 3000);
     pollJob(jobId);
   } catch (err) {

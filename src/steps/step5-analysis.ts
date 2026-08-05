@@ -33,7 +33,12 @@ interface PersistableLead extends RoutedLead {
 }
 
 /** Bkz. supabase/schema.sql → "leads" tablosu. */
-function toSupabaseRow(lead: PersistableLead, status: LeadPersistStatus, rejectionReason: RejectionReason | null) {
+function toSupabaseRow(
+  lead: PersistableLead,
+  status: LeadPersistStatus,
+  rejectionReason: RejectionReason | null,
+  sectorContext: string | null,
+) {
   return {
     place_id: lead.placeId,
     company_name: lead.title,
@@ -44,6 +49,10 @@ function toSupabaseRow(lead: PersistableLead, status: LeadPersistStatus, rejecti
     // Adım 2b'nin (dedup) place_id dışında da aynı işletmeyi tanıyabilmesi için normalize edilmiş alanlar.
     website_domain: normalizeDomain(lead.website),
     name_location_key: buildNameLocationKey(lead.title, lead.address),
+    // Sektör bazlı eleme/geçmiş kontrolü için (bkz. step2b-dedupe.ts). Aynı firma daha sonra farklı
+    // bir sektörle taranırsa bu satır o yeni sektörde "bilinen" sayılmaz — normalize edilmiş sektör
+    // burada üzerine yazılır (place_id upsert), yani bir firma için son taranan sektör kalıcı olur.
+    sector_context: sectorContext,
     rating: lead.rating,
     reviews_count: lead.reviewsCount,
     maps_url: lead.mapsUrl,
@@ -70,8 +79,8 @@ async function upsertLeadRow(row: ReturnType<typeof toSupabaseRow>, companyName:
 }
 
 /** Adım 5'in ikinci yarısı: Gmail taslağına kadar tam işlenmiş lead'i "processed" statüsüyle kaydeder. */
-export async function saveLeadAnalysis(lead: AnalyzedLead): Promise<void> {
-  await upsertLeadRow(toSupabaseRow(lead, "processed", null), lead.title);
+export async function saveLeadAnalysis(lead: AnalyzedLead, sectorContext: string | null): Promise<void> {
+  await upsertLeadRow(toSupabaseRow(lead, "processed", null, sectorContext), lead.title);
 }
 
 /**
@@ -84,7 +93,8 @@ export async function saveLeadAnalysis(lead: AnalyzedLead): Promise<void> {
 export async function saveRejectedLead(
   lead: RoutedLead,
   reason: RejectionReason,
+  sectorContext: string | null,
   extra?: { linkedin?: LinkedInDecisionMaker; analysis?: LeadAnalysis },
 ): Promise<void> {
-  await upsertLeadRow(toSupabaseRow({ ...lead, ...extra }, "rejected", reason), lead.title);
+  await upsertLeadRow(toSupabaseRow({ ...lead, ...extra }, "rejected", reason, sectorContext), lead.title);
 }

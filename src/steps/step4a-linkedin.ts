@@ -145,10 +145,14 @@ export async function enrichViaLinkedIn(lead: RoutedLead): Promise<LinkedInDecis
     // webScrape verisi herhangi bir sebeple yoksa (kazıma başarısız olmuş olabilir) son çare olarak dene.
     try {
       const { markdown } = await scrapeUrlToMarkdown(lead.website);
-      email = extractEmails(markdown)[0];
+      email = extractEmails(markdown, { companyName: lead.title })[0];
     } catch {
       // Fallback başarısız olursa e-postasız devam edilir; worker bu durumu ele alır.
     }
+  }
+  if (!email) {
+    // Son çare: Google Maps/Apify verisinde doğrudan bir e-posta gelmişse (mapsEmail) onu kullan.
+    email = lead.mapsEmail;
   }
 
   const fullName = typeof basicInfo.fullname === "string" ? basicInfo.fullname : "";

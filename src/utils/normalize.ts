@@ -47,3 +47,14 @@ export function buildNameLocationKey(name: string, address: string): string | nu
   const normalizedAddress = normalizeText(address);
   return `${normalizedName}|${normalizedAddress}`;
 }
+
+/**
+ * Sektör bazlı eleme/geçmiş kontrolü (bkz. step2b-dedupe.ts, step5-analysis.ts) için serbest metin
+ * sektör değerini karşılaştırılabilir hale getirir (büyük/küçük harf, Türkçe karakter, noktalama
+ * farkları yok sayılır — "Savunma Sanayi" ile "savunma  sanayi" aynı bağlam sayılır). Boş/tanımsızsa
+ * null döner (sektörsüz aramalar için).
+ */
+export function normalizeSector(value: string | undefined | null): string | null {
+  if (!value) return null;
+  return normalizeText(value) || null;
+}

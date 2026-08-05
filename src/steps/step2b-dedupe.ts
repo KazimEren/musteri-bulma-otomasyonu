@@ -8,12 +8,22 @@ interface KnownLeadRow {
   name_location_key: string | null;
   status: string;
   rejection_reason: string | null;
+  sector_context: string | null;
 }
 
 // scaleFilter uyuşmazlığından dolayı elenen lead'ler için hiç kayıt yazılmıyor (bkz. step3-router.ts),
 // bu yüzden burada karşılaşılan tüm "rejected" satırlar kalıcı (filtre bağımsız) bir sebepten elenmiştir.
-function isPermanentlyKnown(row: KnownLeadRow): boolean {
-  return row.status === "processed" || row.status === "rejected";
+//
+// Sektör bazlı eleme (PROJE GÜNCELLEMESİ isteği): bir satır sadece kaydedildiği sektör bağlamında
+// (normalize edilmiş `sector_context`) "bilinen" sayılır — kullanıcı projede sektörü değiştirdiğinde
+// (örn. Savunma → Medikal) daha önce o firmayı elemiş/işlemiş olması yeni sektörde bir şey ifade
+// etmez, firma yeniden değerlendirmeye açılır. `sector_context` NULL olan satırlar bu migration
+// öncesinden kalma eski kayıtlardır; geriye dönük uyumluluk için sektörden bağımsız (eski global
+// dedup davranışı) "bilinen" sayılmaya devam eder.
+function isKnownForSector(row: KnownLeadRow, sectorContext: string | null): boolean {
+  const statusMatches = row.status === "processed" || row.status === "rejected";
+  if (!statusMatches) return false;
+  return row.sector_context === null || row.sector_context === sectorContext;
 }
 
 function escapeForOrFilter(value: string): string {
@@ -26,8 +36,12 @@ function escapeForOrFilter(value: string): string {
  * ayıklar. Eşleşme place_id, normalize edilmiş website domain'i veya normalize edilmiş
  * isim+lokasyon anahtarından herhangi biriyle kurulabilir (bkz. src/utils/normalize.ts).
  * Böylece tekrarlanan taramalarda aynı işletmeler için gereksiz Jina/LinkedIn/Gemini çağrısı yapılmaz.
+ *
+ * `sectorContext` mevcut aramanın (normalize edilmiş) hedef sektörüdür (bkz. pipeline.worker.ts,
+ * src/utils/normalize.ts → normalizeSector). Bir firma başka bir sektörde işlenmiş/elenmiş olsa
+ * bile bu sektörde eleme geçmişinde yoksa yeniden değerlendirilir (bkz. isKnownForSector).
  */
-export async function filterAlreadyKnownLeads(leads: MapsLead[]): Promise<MapsLead[]> {
+export async function filterAlreadyKnownLeads(leads: MapsLead[], sectorContext: string | null): Promise<MapsLead[]> {
   if (leads.length === 0) return leads;
 
   const placeIds = leads.map((lead) => lead.placeId).filter(Boolean);
@@ -48,7 +62,7 @@ export async function filterAlreadyKnownLeads(leads: MapsLead[]): Promise<MapsLe
 
   const { data, error } = await supabase
     .from(LEADS_TABLE)
-    .select("place_id, website_domain, name_location_key, status, rejection_reason")
+    .select("place_id, website_domain, name_location_key, status, rejection_reason, sector_context")
     .or(orFilters.join(","));
 
   if (error) {
@@ -62,7 +76,7 @@ export async function filterAlreadyKnownLeads(leads: MapsLead[]): Promise<MapsLe
   const knownNameLocationKeys = new Set<string>();
 
   for (const row of (data ?? []) as KnownLeadRow[]) {
-    if (!isPermanentlyKnown(row)) continue;
+    if (!isKnownForSector(row, sectorContext)) continue;
     knownPlaceIds.add(row.place_id);
     if (row.website_domain) knownDomains.add(row.website_domain);
     if (row.name_location_key) knownNameLocationKeys.add(row.name_location_key);

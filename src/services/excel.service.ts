@@ -1,9 +1,10 @@
 import ExcelJS from "exceljs";
 import type { FinalizedLead, PipelineJobResult } from "../types/index.js";
 
-const SCALE_LABELS: Record<FinalizedLead["scale"], string> = {
-  large: "Büyük Ölçek",
-  small: "Küçük Ölçek",
+const TIER_LABELS: Record<FinalizedLead["tier"], string> = {
+  1: "Tier 1 — Kesin Büyük Ölçek",
+  2: "Tier 2 — Potansiyel Büyük/Güçlü KOBİ",
+  3: "Tier 3 — Sağlıklı Küçük İşletme",
 };
 
 function formatEmailDraft(lead: FinalizedLead): string {
@@ -28,8 +29,9 @@ export function buildLeadsWorkbook(result: PipelineJobResult): ExcelJS.Workbook 
   const includeEmailDraft = result.leads.some((lead) => lead.email);
 
   worksheet.columns = [
-    { header: "Şirket Ölçeği", key: "scale", width: 16 },
+    { header: "Şirket Ölçeği (Tier)", key: "scale", width: 30 },
     { header: "Şirket Adı", key: "companyName", width: 32 },
+    { header: "Şirket Web Sitesi", key: "website", width: 32 },
     { header: "E-Posta Adresi", key: "email", width: 28 },
     { header: "Şirketin Yaptığı İş", key: "business", width: 48 },
     { header: "Şirkete Nasıl Bir İş Yapabiliriz?", key: "pitch", width: 48 },
@@ -43,8 +45,9 @@ export function buildLeadsWorkbook(result: PipelineJobResult): ExcelJS.Workbook 
 
   for (const lead of result.leads) {
     const row = worksheet.addRow({
-      scale: SCALE_LABELS[lead.scale],
+      scale: TIER_LABELS[lead.tier],
       companyName: lead.title,
+      website: lead.website,
       email: lead.contactEmail,
       business: lead.analysis.profileSummary,
       pitch: lead.analysis.problemSolutionPitch,

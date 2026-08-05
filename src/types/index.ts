@@ -35,13 +35,21 @@ export interface WebScrapeResult {
 // Adım 3: Router sonrası ölçek etiketi
 export type CompanyScale = "large" | "small";
 
+/**
+ * 4 kademeli (4-Tier) kurumsallık skorlamasındaki ayrıntılı katman (bkz. step3-router.ts):
+ * 1 = Kesin Büyük Ölçek (45-100), 2 = Potansiyel Büyük/Güçlü KOBİ (30-44, "large" için esnek
+ * yedek havuz), 3 = Sağlıklı Küçük İşletme (15-29). Tier 4 (Çöp/Yetersiz Veri, 0-14) hiçbir zaman
+ * RoutedLead'e ulaşmaz — routeSingleLead() o durumda null döner (pipeline'a hiç girmez).
+ */
+export type CompanyTier = 1 | 2 | 3;
+
 export interface RoutedLead extends MapsLead {
+  /** Tier 1-2 => "large" (Derin Tarama + LinkedIn hattı), Tier 3 => "small" (Hızlı Tarama hattı). */
   scale: CompanyScale;
-  /**
-   * Gemini'nin ürettiği 0-100 arası kurumsallık skoru. Web sitesi olmadığı için skorlama
-   * yapılamayan (direkt "small" kabul edilen) lead'lerde undefined kalır.
-   */
-  corporateScore?: number;
+  /** Bkz. CompanyTier. */
+  tier: CompanyTier;
+  /** 0-100 arası toplam kurumsallık skoru (bkz. step3-router.ts skorlama dağılımı). */
+  corporateScore: number;
   /** Adım 3'te toplanan zengin web sitesi bağlamı; Adım 4/5'e olduğu gibi taşınır. */
   webScrape?: WebScrapeResult;
 }
@@ -83,7 +91,7 @@ export interface FinalizedLead extends AnalyzedLead {
   /**
    * LinkedIn'den ya da web sitesinden bulunan iletişim e-postası. Çıktı türünden bağımsız olarak
    * ZORUNLU: e-postası bulunamayan lead Gemini analizine hiç girmeden "rejected" olarak elenir
-   * (bkz. pipeline.worker.ts → processLead), bu yüzden FinalizedLead'e ulaşan her satırda dolu olur.
+   * (bkz. pipeline.worker.ts → processCandidate), bu yüzden FinalizedLead'e ulaşan her satırda dolu olur.
    */
   contactEmail: string;
   /** "draft" modunda Gmail'e taslak olarak gidenle aynı metin; "excel_full" modunda sadece Excel'e yazılır, Gmail'e hiç gitmez. */
@@ -114,6 +122,11 @@ export type OutputType = "draft" | "excel_info" | "excel_full";
 // Pipeline job giriş verisi (kullanıcının girdiği proje açıklaması)
 export interface PipelineJobInput {
   projectDescription: string;
+  /**
+   * Hedeflenen GEÇERLİ (e-postası doğrulanmış) lead sayısı — "haritadan çekilecek toplam firma
+   * sayısı" DEĞİL. Pipeline bu sayıya ulaşana kadar Apify Maps'ten kademeli olarak daha geniş bir
+   * aday havuzu çeker ve adayları teker teker işler (bkz. pipeline.worker.ts → OVERFETCH_MULTIPLIERS).
+   */
   maxResultsPerLocation?: number;
   /** Kullanıcı arayüzden doğrudan hedef sektör belirtmek isterse Adım 1'in LLM analizine yön verir. */
   targetSectorHint?: string;
@@ -126,10 +139,13 @@ export interface PipelineJobInput {
 }
 
 export interface PipelineJobResult {
+  /** Aday havuzu (kademeli olarak) genişletilirken Maps'ten taranan, mükerrer olmayan toplam işletme sayısı. */
   totalLeadsFound: number;
   /** Daha önce (herhangi bir geçmiş aramada) kalıcı olarak işlenmiş/elenmiş olduğu için Adım 3'e hiç sokulmayan lead sayısı. */
   totalLeadsAlreadyKnown: number;
+  /** scaleFilter'a uyan (Şirket Ölçeği Ayrımı'ndan geçen) aday sayısı. */
   totalLeadsMatchingScale: number;
+  /** Geçerli e-postası doğrulanıp analiz edilerek çıktıya eklenen (hedeflenen sayı ya da havuz tükendiyse daha azı) lead sayısı. */
   totalDraftsCreated: number;
   leads: FinalizedLead[];
 }
@@ -144,4 +160,5 @@ export interface SearchProject {
   maxResultsPerLocation: number | null;
   outputType: OutputType;
   createdAt: string;
+  updatedAt: string;
 }
