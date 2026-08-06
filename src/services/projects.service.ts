@@ -77,18 +77,43 @@ export async function upsertSearchProject(input: PipelineJobInput, projectId?: s
 }
 
 const RECENT_PROJECTS_LIMIT = 20;
+// upsertSearchProject akışından ÖNCEKİ (her arama ayrı satır açan) dönemden kalma eski mükerrer
+// kayıtları listede gizleyebilmek için daha geniş bir havuz çekilir (bkz. aşağıdaki gruplama).
+// DB'den HİÇBİR ŞEY SİLİNMEZ — sadece "Geçmiş Projelerim" listesinde tek satıra indirgenir.
+const RAW_FETCH_LIMIT = 200;
 
-/** "Geçmiş Projelerim" dropdown'ı için en son dokunulan aramaları döner (en yeni önce). */
+/** Aynı proje metnini (baştaki/sondaki boşluk ve büyük/küçük harf farkı hariç) tanımak için anahtar. */
+function descriptionKey(description: string): string {
+  return description.trim().toLowerCase();
+}
+
+/**
+ * "Geçmiş Projelerim" dropdown'ı için en son dokunulan aramaları döner (en yeni önce). Aynı proje
+ * açıklamasına sahip birden fazla satır varsa (bu upsert akışından önceki dönemden kalma mükerrer
+ * kayıtlar ya da nadir bir yarış durumu) sadece en son güncellenen tutulur — DB'deki eski satırlar
+ * SİLİNMEZ, yalnızca bu listede gizlenir (bkz. RAW_FETCH_LIMIT).
+ */
 export async function listRecentSearchProjects(): Promise<SearchProject[]> {
   const { data, error } = await supabase
     .from(PROJECTS_TABLE)
     .select("*")
     .order("updated_at", { ascending: false })
-    .limit(RECENT_PROJECTS_LIMIT);
+    .limit(RAW_FETCH_LIMIT);
 
   if (error) {
     throw new Error(`Arama geçmişi okunamadı: ${error.message}`);
   }
 
-  return (data as SearchProjectRow[]).map(fromRow);
+  const seenDescriptions = new Set<string>();
+  const deduped: SearchProject[] = [];
+
+  for (const row of data as SearchProjectRow[]) {
+    const key = descriptionKey(row.project_description);
+    if (seenDescriptions.has(key)) continue;
+    seenDescriptions.add(key);
+    deduped.push(fromRow(row));
+    if (deduped.length >= RECENT_PROJECTS_LIMIT) break;
+  }
+
+  return deduped;
 }
