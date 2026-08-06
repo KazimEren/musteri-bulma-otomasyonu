@@ -12,6 +12,9 @@ const startPipelineSchema = z.object({
   targetLocationHint: z.string().min(1).optional(),
   scaleFilter: z.enum(["all", "large", "small"]).optional(),
   outputType: z.enum(["draft", "excel_info", "excel_full"]).optional(),
+  // E-posta imzasında görünecek gönderen adı; boşsa marka adı/jenerik departman adına düşülür
+  // (bkz. step6-gmail-draft.ts → resolveSenderName).
+  senderName: z.string().min(1).optional(),
   // Kullanıcı "Geçmiş Projelerim"den seçtiği (veya aynı oturumda daha önce başlattığı) bir projede
   // sektör/arama alanını değiştirip tekrar aradığında gönderilir; yeni bir proje kaydı açmak yerine
   // aynı search_projects satırı güncellenir (bkz. projects.service.ts → upsertSearchProject).

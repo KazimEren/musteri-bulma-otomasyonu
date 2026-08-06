@@ -6,6 +6,7 @@ interface RawAnalysis {
   sectors?: string[];
   keywords?: string[];
   locations?: string[];
+  brandName?: string;
 }
 
 /**
@@ -26,5 +27,6 @@ export async function analyzeProject(projectDescription: string, hints: AnalyzeP
     sectors: raw.sectors ?? [],
     keywords: raw.keywords,
     locations: raw.locations,
+    brandName: raw.brandName?.trim() || null,
   };
 }

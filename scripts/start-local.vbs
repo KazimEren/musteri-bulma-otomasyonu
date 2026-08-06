@@ -7,9 +7,8 @@ Set WshShell = CreateObject("WScript.Shell")
 projectDir = fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName))
 WshShell.CurrentDirectory = projectDir
 
-' Sunucu ve worker'i gizli pencerede baslat (0 = gizli, False = bekleme)
-WshShell.Run "cmd /c npm run dev", 0, False
-WshShell.Run "cmd /c npm run worker:dev", 0, False
+' Sunucu ve worker'i tek komutla (concurrently) gizli pencerede baslat (0 = gizli, False = bekleme)
+WshShell.Run "cmd /c npm run dev:all", 0, False
 
 ' Sunucunun ayaga kalkmasi icin kisa bir bekleme
 WScript.Sleep 4000

@@ -19,7 +19,7 @@ import { filterAlreadyKnownLeads } from "../steps/step2b-dedupe.js";
 import { screenLead, routeScreenedLead } from "../steps/step3-router.js";
 import { enrichViaLinkedIn } from "../steps/step4a-linkedin.js";
 import { analyzeLeadFit, saveLeadAnalysis, saveRejectedLead } from "../steps/step5-analysis.js";
-import { createGmailDraft, draftColdEmail } from "../steps/step6-gmail-draft.js";
+import { createGmailDraft, draftColdEmail, resolveSenderName } from "../steps/step6-gmail-draft.js";
 import { mapWithConcurrency, mapWithEarlyExit } from "../utils/concurrency.js";
 import { normalizeSector } from "../utils/normalize.js";
 import { pickBestEmail } from "../utils/email-priority.js";
@@ -105,6 +105,7 @@ async function processCandidate(
   outputType: OutputType,
   stats: RunStats,
   sectorContext: string | null,
+  signatureName: string,
 ): Promise<FinalizedLead | null> {
   const routed = await routeScreenedLead(screened, scaleFilter);
   if (!routed) return null;
@@ -146,14 +147,14 @@ async function processCandidate(
 
   try {
     if (outputType === "draft") {
-      const email = await draftColdEmail(analyzed);
+      const email = await draftColdEmail(analyzed, signatureName);
       const gmailDraftId = await createGmailDraft(email, contactEmail);
       return { ...analyzed, contactEmail, email, gmailDraftId };
     }
 
     // "excel_full" ayrıca bir e-posta taslağı METNİ üretir (Excel'in son sütunu için) ama bunu
     // Gmail'e hiç göndermez/kaydetmez; "excel_info" bu adımı da atlayarak daha da hızlı çalışır.
-    const email = outputType === "excel_full" ? await draftColdEmail(analyzed) : undefined;
+    const email = outputType === "excel_full" ? await draftColdEmail(analyzed, signatureName) : undefined;
     return { ...analyzed, contactEmail, email };
   } catch (err) {
     if (err instanceof GeminiQuotaExceededError) throw err;
@@ -182,6 +183,7 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
     targetLocationHint,
     scaleFilter = "all",
     outputType = "draft",
+    senderName,
   } = job.data;
 
   await job.updateProgress({ step: 1, label: "Dinamik Proje Analizi" });
@@ -191,6 +193,10 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
   // elle girdiği hedef sektör önceliklidir, boşsa Adım 1'in (Gemini) bulduğu ilk sektöre düşülür.
   // İkisi de yoksa null (sektörsüz arama) — bkz. isKnownForSector.
   const sectorContext = normalizeSector(targetSectorHint) ?? normalizeSector(analysis.sectors[0]);
+
+  // E-posta imzası: kullanıcının girdiği isim → yoksa marka adı + " Ekibi" → yoksa jenerik departman
+  // adı. Kişisel bir isim ASLA kullanılmaz (bkz. step6-gmail-draft.ts → resolveSenderName).
+  const signatureName = resolveSenderName(senderName, analysis.brandName);
 
   const seenPlaceIds = new Set<string>();
   const stats: RunStats = { totalLeadsMatchingScale: 0 };
@@ -240,7 +246,7 @@ async function runPipeline(job: Job<PipelineJobInput, PipelineJobResult>): Promi
 
     const remaining = targetValidLeads - finalizedLeads.length;
     const stageResults = await mapWithEarlyExit(orderedScreened, env.LEAD_PROCESSING_CONCURRENCY, remaining, (screenedLead) =>
-      processCandidate(projectDescription, screenedLead, scaleFilter, outputType, stats, sectorContext),
+      processCandidate(projectDescription, screenedLead, scaleFilter, outputType, stats, sectorContext, signatureName),
     );
     finalizedLeads.push(...stageResults);
 

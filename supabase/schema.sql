@@ -52,6 +52,9 @@ create table if not exists public.search_projects (
   scale_filter text not null default 'all' check (scale_filter in ('all', 'large', 'small')),
   max_results_per_location integer,
   output_type text not null default 'draft' check (output_type in ('draft', 'excel_info', 'excel_full')),
+  -- E-posta imzasında görünecek gönderen adı (ör. "BörüCASE Ekibi"); boşsa marka adı/jenerik
+  -- departman adına düşülür, ASLA kişisel bir isim varsayılan olmaz (bkz. step6-gmail-draft.ts).
+  sender_name text,
   created_at timestamptz not null default now(),
   -- Kullanıcı mevcut bir projede sektör/arama alanlarını güncellediğinde (yeni satır açmadan)
   -- değişir; "Geçmiş Projelerim" listesi buna göre sıralanır (bkz. projects.service.ts).

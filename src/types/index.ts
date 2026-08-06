@@ -3,6 +3,13 @@ export interface ProjectAnalysis {
   sectors: string[];
   keywords: string[];
   locations: string[];
+  /**
+   * Proje açıklamasında net bir şekilde geçen marka/ürün/şirket adı (ör. "BörüCASE"); açıklama
+   * sadece genel bir hizmet tanımıysa (belirgin bir özel isim yoksa) null — TAHMİN EDİLMEZ
+   * (bkz. [[feedback-skip-dont-guess]]). Adım 6'da e-posta imzasının varsayılan değeri için kullanılır
+   * (bkz. step6-gmail-draft.ts → resolveSenderName).
+   */
+  brandName: string | null;
 }
 
 // Adım 2: Google Maps'ten (Apify) gelen ham/temizlenmiş lead
@@ -155,6 +162,12 @@ export interface PipelineJobInput {
   scaleFilter?: CompanyScale | "all";
   /** Varsayılan: "draft". */
   outputType?: OutputType;
+  /**
+   * E-posta imzasında görünecek gönderen adı (ör. "BörüCASE Ekibi", "Ahmet Bey"). Boşsa Adım 1'in
+   * bulduğu marka adı + " Ekibi", o da yoksa jenerik bir departman adı kullanılır — hiçbir zaman
+   * kişisel bir isim varsayılan olmaz (bkz. step6-gmail-draft.ts → resolveSenderName).
+   */
+  senderName?: string;
 }
 
 export interface PipelineJobResult {
@@ -178,6 +191,7 @@ export interface SearchProject {
   scaleFilter: CompanyScale | "all";
   maxResultsPerLocation: number | null;
   outputType: OutputType;
+  senderName: string | null;
   createdAt: string;
   updatedAt: string;
 }

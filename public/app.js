@@ -109,6 +109,7 @@ historySelect.addEventListener("change", () => {
   document.getElementById("projectDescription").value = project.projectDescription ?? "";
   document.getElementById("targetSectorHint").value = project.targetSectorHint ?? "";
   document.getElementById("targetLocationHint").value = project.targetLocationHint ?? "";
+  document.getElementById("senderName").value = project.senderName ?? "";
   document.getElementById("maxResultsPerLocation").value = project.maxResultsPerLocation ?? 10;
 
   const scaleValue = project.scaleFilter ?? "all";
@@ -282,6 +283,9 @@ form.addEventListener("submit", async (event) => {
 
   const locationHint = formData.get("targetLocationHint")?.trim();
   if (locationHint) payload.targetLocationHint = locationHint;
+
+  const senderName = formData.get("senderName")?.trim();
+  if (senderName) payload.senderName = senderName;
 
   const scaleFilter = formData.get("scaleFilter");
   if (scaleFilter && scaleFilter !== "all") payload.scaleFilter = scaleFilter;

@@ -25,6 +25,7 @@ Sorun-çözüm bağlantısı: ${lead.analysis.problemSolutionPitch}
 4. Tek ve net bir eylem çağrısı (CTA) ile bitir — kısa bir görüşme veya yanıt talebi, baskıcı olmayan bir dille.
 5. Linkleri düz metin olarak yaz (markdown biçimlendirme kullanma); e-posta düz metin (text/plain) olarak gönderilecek.
 6. ${contactFirstName ? `E-postaya "${contactFirstName}" ismiyle hitap ederek başla.` : "E-postaya nazik, genel bir hitapla başla (isim kullanma)."}
+7. E-postayı kısa bir kapanışla ve "${senderName}" imzasıyla bitir (ör. "İyi çalışmalar,\\n${senderName}"). Kişisel bir isim UYDURMA — sadece "${senderName}" değerini kullan.
 
 Sadece şu anahtarları içeren HAM bir JSON objesi döndür: subject (string), body (string). Markdown, açıklama, ek metin YOK.`;
 }

@@ -9,6 +9,7 @@ interface SearchProjectRow {
   scale_filter: string;
   max_results_per_location: number | null;
   output_type: string;
+  sender_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ function fromRow(row: SearchProjectRow): SearchProject {
     scaleFilter: row.scale_filter as SearchProject["scaleFilter"],
     maxResultsPerLocation: row.max_results_per_location,
     outputType: row.output_type as SearchProject["outputType"],
+    senderName: row.sender_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -35,6 +37,7 @@ function toRow(input: PipelineJobInput) {
     scale_filter: input.scaleFilter ?? "all",
     max_results_per_location: input.maxResultsPerLocation ?? null,
     output_type: input.outputType ?? "draft",
+    sender_name: input.senderName ?? null,
   };
 }
 
