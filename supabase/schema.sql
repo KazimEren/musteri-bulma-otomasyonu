@@ -23,7 +23,9 @@ create table if not exists public.leads (
   -- "rejected": kalıcı bir sebeple (rejection_reason) pipeline'dan düşürülmüş lead.
   status text not null default 'processed' check (status in ('processed', 'rejected')),
   rejection_reason text check (
-    rejection_reason is null or rejection_reason in ('no_contact_email', 'linkedin_verification_failed', 'enrichment_failed')
+    rejection_reason is null or rejection_reason in (
+      'no_contact_email', 'linkedin_verification_failed', 'enrichment_failed', 'low_corporate_score'
+    )
   ),
   contact_name text,
   contact_title text,

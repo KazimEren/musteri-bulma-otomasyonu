@@ -133,8 +133,23 @@ export type LeadPersistStatus = "processed" | "rejected";
  * Bir lead'in kalıcı olarak (gelecekteki taramalarda da geçerli şekilde) elendiği sebep.
  * NOT: scaleFilter uyuşmazlığı buraya dahil değil — o an seçilen filtreye özgüdür, kalıcı
  * bir kusur değildir; bu yüzden dedup mekanizması bu sebeple hiç kayıt yazmaz (bkz. step3-router.ts).
+ *
+ * Elemenin KAPSAMI (bkz. step2b-dedupe.ts → GLOBAL_REJECTION_REASONS) sebebe göre değişir:
+ * - "no_contact_email": firmanın hiçbir kaynakta (web sitesi, LinkedIn, Maps) e-postası yok VEYA
+ *   web sitesi/domain'i erişilemez durumda — bu sektörden BAĞIMSIZ, yapısal/kalıcı bir gerçektir
+ *   (B sektöründe arandığında da aynı firmanın e-postası olmayacak), bu yüzden GLOBAL elenir.
+ * - "linkedin_verification_failed" / "enrichment_failed": teknik/kimlik doğrulama sorunları,
+ *   sektör bazlı elenir (bkz. isKnownForSector).
+ * - "low_corporate_score": Tier 4 (skor < MIN_QUALIFIED_LEAD_SCORE) — firma A sektörüne göre
+ *   düşük puan almış olabilir ama B sektöründe farklı bir puan alabilir (ör. Gemini'nin ürün/
+ *   sertifika/çok dillilik değerlendirmesi hedef kitleye göre değişir), bu yüzden SEKTÖR BAZLI
+ *   elenir — başka bir sektörde tekrar değerlendirmeye açılır.
  */
-export type RejectionReason = "no_contact_email" | "linkedin_verification_failed" | "enrichment_failed";
+export type RejectionReason =
+  | "no_contact_email"
+  | "linkedin_verification_failed"
+  | "enrichment_failed"
+  | "low_corporate_score";
 
 /**
  * Pipeline'ın üreteceği çıktı türü:

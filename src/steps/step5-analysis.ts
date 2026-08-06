@@ -8,6 +8,7 @@ import type {
   LeadAnalysis,
   LeadPersistStatus,
   LinkedInDecisionMaker,
+  MapsLead,
   RejectionReason,
   RoutedLead,
 } from "../types/index.js";
@@ -27,7 +28,16 @@ export async function analyzeLeadFit(projectDescription: string, lead: EnrichedL
   return generateJson<LeadAnalysis>(prompt);
 }
 
-interface PersistableLead extends RoutedLead {
+/**
+ * saveRejectedLead()'in kabul ettiği minimum alan seti: routing'den ÖNCE (Tier 4/low score) reddedilen
+ * lead'lerde scale/tier/corporateScore henüz atanmamıştır (bkz. step3-router.ts → LowScoreDrop), bu
+ * yüzden RoutedLead'in aksine bunlar burada opsiyoneldir.
+ */
+interface PersistableLead extends MapsLead {
+  scale?: RoutedLead["scale"];
+  tier?: RoutedLead["tier"];
+  corporateScore?: RoutedLead["corporateScore"];
+  webScrape?: RoutedLead["webScrape"];
   linkedin?: LinkedInDecisionMaker;
   analysis?: LeadAnalysis;
 }
@@ -56,7 +66,10 @@ function toSupabaseRow(
     rating: lead.rating,
     reviews_count: lead.reviewsCount,
     maps_url: lead.mapsUrl,
-    scale: lead.scale,
+    // Tier 4 (low_corporate_score) reddi routing'den ÖNCE gerçekleştiği için lead.scale henüz
+    // atanmamıştır; DB'nin "scale not null" kısıtı için en yakın kategori olan "small" varsayılır
+    // (bu satırlar zaten sadece dedup eşleşmesi için kullanılır, scale raporlamada dikkate alınmaz).
+    scale: lead.scale ?? "small",
     corporate_score: lead.corporateScore ?? null,
     status,
     rejection_reason: rejectionReason,
@@ -85,13 +98,14 @@ export async function saveLeadAnalysis(lead: AnalyzedLead, sectorContext: string
 
 /**
  * Adım 2b (dedup) girdisi: kalıcı bir sebeple (e-posta bulunamadı, LinkedIn kimliği doğrulanamadı,
- * zenginleştirme hata verdi) pipeline'dan düşen lead'i "rejected" statüsüyle kaydeder. Böylece
- * gelecekteki taramalarda aynı işletme için tekrar Jina/LinkedIn/Gemini çağrısı yapılmaz.
+ * zenginleştirme hata verdi, düşük kurumsallık skoru) pipeline'dan düşen lead'i "rejected"
+ * statüsüyle kaydeder. Böylece gelecekteki taramalarda aynı işletme için tekrar Jina/LinkedIn/
+ * Gemini çağrısı yapılmaz — kapsamın (global mi sektör bazlı mı) belirlendiği yer step2b-dedupe.ts.
  * scaleFilter uyuşmazlığı BURAYA DAHIL DEĞİLDİR — o an seçilen filtreye özgüdür, kalıcı bir
  * kusur değildir (bkz. RejectionReason tip tanımı, step3-router.ts).
  */
 export async function saveRejectedLead(
-  lead: RoutedLead,
+  lead: PersistableLead,
   reason: RejectionReason,
   sectorContext: string | null,
   extra?: { linkedin?: LinkedInDecisionMaker; analysis?: LeadAnalysis },

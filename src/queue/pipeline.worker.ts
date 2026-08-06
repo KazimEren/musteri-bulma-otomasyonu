@@ -16,7 +16,7 @@ import type {
 import { analyzeProject } from "../steps/step1-analyze.js";
 import { searchGoogleMaps } from "../steps/step2-maps-search.js";
 import { filterAlreadyKnownLeads } from "../steps/step2b-dedupe.js";
-import { screenLead, routeScreenedLead } from "../steps/step3-router.js";
+import { screenLead, routeScreenedLead, type LowScoreDrop } from "../steps/step3-router.js";
 import { enrichViaLinkedIn } from "../steps/step4a-linkedin.js";
 import { analyzeLeadFit, saveLeadAnalysis, saveRejectedLead } from "../steps/step5-analysis.js";
 import { createGmailDraft, draftColdEmail, resolveSenderName } from "../steps/step6-gmail-draft.js";
@@ -46,6 +46,10 @@ function logSaveError(err: unknown): void {
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function isLowScoreDrop(value: RoutedLead | LowScoreDrop): value is LowScoreDrop {
+  return "lowScore" in value;
 }
 
 /**
@@ -107,8 +111,16 @@ async function processCandidate(
   sectorContext: string | null,
   signatureName: string,
 ): Promise<FinalizedLead | null> {
-  const routed = await routeScreenedLead(screened, scaleFilter);
-  if (!routed) return null;
+  const routeResult = await routeScreenedLead(screened, scaleFilter);
+  if (routeResult === null) return null; // scaleFilter uyuşmazlığı: geçici, kayıt yazılmaz.
+  if (isLowScoreDrop(routeResult)) {
+    // Tier 4 (düşük kurumsallık skoru): SEKTÖR BAZLI kalıcı eleme — bkz. step2b-dedupe.ts.
+    await saveRejectedLead({ ...routeResult.lead, corporateScore: routeResult.corporateScore }, "low_corporate_score", sectorContext).catch(
+      logSaveError,
+    );
+    return null;
+  }
+  const routed = routeResult;
   stats.totalLeadsMatchingScale += 1;
 
   const enriched = await enrichLead(routed, sectorContext);

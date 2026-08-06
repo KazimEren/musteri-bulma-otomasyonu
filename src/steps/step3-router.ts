@@ -158,12 +158,27 @@ export async function screenLead(lead: MapsLead): Promise<ScreenedLead | null> {
 }
 
 /**
- * Adım 3b (pahalı, Gemini'li): screenLead()'in topladığı web kazıma verisiyle asıl karma skorlamayı
- * yapıp Tier/scale kararını verir; kullanıcı tercihiyle çelişirse ya da Tier 4 çıkarsa null döner.
- * Sadece öncelik sıralamasında hedefe dahil edilen (bkz. pipeline.worker.ts) taranmış lead'ler için
- * çağrılır — böylece gereksiz Son Çare/mailsiz adaylar için Gemini kredisi harcanmaz.
+ * Tier 4 (skor < MIN_QUALIFIED_LEAD_SCORE) düşüşünü scaleFilter uyuşmazlığından ayırt etmek için:
+ * ilki SEKTÖR BAZLI kalıcı bir eleme sebebidir (bkz. RejectionReason → "low_corporate_score",
+ * step2b-dedupe.ts), ikincisi o an seçilen filtreye özgüdür ve hiç kayıt yazılmaz. pipeline.worker.ts
+ * bu iki null-benzeri durumu ayırt edip sadece ilkini saveRejectedLead ile kalıcı olarak işaretler.
  */
-export async function routeScreenedLead(screened: ScreenedLead, scaleFilter: CompanyScale | "all"): Promise<RoutedLead | null> {
+export interface LowScoreDrop {
+  lowScore: true;
+  lead: MapsLead;
+  corporateScore: number;
+}
+
+/**
+ * Adım 3b (pahalı, Gemini'li): screenLead()'in topladığı web kazıma verisiyle asıl karma skorlamayı
+ * yapıp Tier/scale kararını verir; kullanıcı tercihiyle çelişirse null, Tier 4 çıkarsa LowScoreDrop
+ * döner. Sadece öncelik sıralamasında hedefe dahil edilen (bkz. pipeline.worker.ts) taranmış lead'ler
+ * için çağrılır — böylece gereksiz Son Çare/mailsiz adaylar için Gemini kredisi harcanmaz.
+ */
+export async function routeScreenedLead(
+  screened: ScreenedLead,
+  scaleFilter: CompanyScale | "all",
+): Promise<RoutedLead | LowScoreDrop | null> {
   const { lead, webScrape } = screened;
 
   const corporateScore = await scoreLead(lead, webScrape);
@@ -173,7 +188,7 @@ export async function routeScreenedLead(screened: ScreenedLead, scaleFilter: Com
     console.warn(
       `[TIER4_DROPPED] ${lead.title}: skor ${corporateScore} (Tier 3 eşiği ${MIN_QUALIFIED_LEAD_SCORE}'in altı) — pipeline'a hiç alınmadan elendi`,
     );
-    return null;
+    return { lowScore: true, lead, corporateScore };
   }
 
   const scale: CompanyScale = corporateScore >= MIN_LARGE_SCALE_SCORE ? "large" : "small";

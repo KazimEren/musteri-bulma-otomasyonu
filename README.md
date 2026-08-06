@@ -11,7 +11,7 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
 1. **Dinamik Proje Analizi** — Gemini, proje açıklamasından hedef sektör/anahtar kelime/lokasyon çıkarır (`src/steps/step1-analyze.ts`).
 2. **Akıllı Filtreleme** — Apify üzerinden Google Maps araması yapılır; web sitesi olmayan işletmeler elenir, mükerrerler temizlenir (`step2-maps-search.ts`).
 3. **Daha Önce Taranmış İşletmeleri Eleme (dedup)** — Supabase'deki `leads` tablosunda `place_id`, website domain'i veya normalize edilmiş isim+lokasyon eşleşmesiyle daha önce tam işlenmiş (`processed`) ya da kalıcı bir sebeple elenmiş (`rejected`) işletmeler ayıklanır; böylece tekrarlanan taramalarda aynı işletme için gereksiz Jina/LinkedIn/Gemini kredisi harcanmaz (`step2b-dedupe.ts`).
-4. **Şirket Ölçeği Ayrımı** — Kalan her lead'in web sitesi Jina.ai ile kazınır, Google Maps verisi + kazınan içerik Gemini'ye beslenerek 0-100 arası bir Kurumsallık Skoru üretilir; skor ve kullanıcının `scaleFilter` tercihine göre lead büyük/küçük ölçek hattına yönlendirilir ya da atlanır (`step3-router.ts`).
+4. **Şirket Ölçeği Ayrımı** — Kalan her lead'in web sitesi Jina.ai ile kazınır, Google Maps verisi + kazınan içerik Gemini'ye beslenerek 0-100 arası bir Kurumsallık Skoru üretilir; skor ve kullanıcının `scaleFilter` tercihine göre lead büyük/küçük ölçek hattına yönlendirilir ya da atlanır. Skor Tier 4 eşiğinin altındaysa (`low_corporate_score`) SEKTÖR BAZLI kalıcı olarak elenir — aynı firma başka bir sektörde farklı bir skor alabileceği için o sektörde yeniden değerlendirmeye açıktır (`step3-router.ts`).
 5. **Ölçeğe Göre Veri Toplama**
    - Büyük ölçek → LinkedIn hattı: Apify ile karar verici kişi aranır, **LinkedIn şirket sayfasının web sitesi Google Maps'teki domain ile eşleşmiyorsa aday reddedilir** (`step4a-linkedin.ts`).
    - Küçük ölçek → Adım 4'te zaten kazınan web sitesi verisi kullanılır, ek bir Jina çağrısı yapılmaz (`step4b-webscrape.ts`).
@@ -24,7 +24,11 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
 
 Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir. `result.leads`'teki her lead'in (çıktı türünden bağımsız) geçerli bir `contactEmail`'i vardır.
 
-Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
+Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
+
+Bu ret sebeplerinin kapsamı aynı değildir (bkz. `step2b-dedupe.ts` → `GLOBAL_REJECTION_REASONS`):
+- **Global (sektörden bağımsız)** — `no_contact_email`: firmanın hiçbir kaynakta e-postası yoksa/domain'i erişilemezse bu her sektörde geçerli yapısal bir gerçektir; hangi sektörde aranırsa aransın Google Maps'ten tekrar gelse bile hiç işlenmeden atlanır.
+- **Sektör bazlı** — `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`: sadece elendiği sektör bağlamında geçerlidir; firma başka bir sektörde aranırsa (ör. Gemini'nin kurumsallık skorlaması hedef kitleye göre farklı sonuç verebileceği için) yeniden değerlendirmeye açılır.
 
 ## Yerel Arayüz
 

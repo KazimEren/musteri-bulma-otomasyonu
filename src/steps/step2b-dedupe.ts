@@ -1,6 +1,6 @@
 import { LEADS_TABLE, supabase } from "../services/supabase.service.js";
 import { buildNameLocationKey, normalizeDomain } from "../utils/normalize.js";
-import type { MapsLead } from "../types/index.js";
+import type { MapsLead, RejectionReason } from "../types/index.js";
 
 interface KnownLeadRow {
   place_id: string;
@@ -20,9 +20,24 @@ interface KnownLeadRow {
 // etmez, firma yeniden değerlendirmeye açılır. `sector_context` NULL olan satırlar bu migration
 // öncesinden kalma eski kayıtlardır; geriye dönük uyumluluk için sektörden bağımsız (eski global
 // dedup davranışı) "bilinen" sayılmaya devam eder.
+//
+// GLOBAL vs SEKTÖR BAZLI ELEME (İKİNCİ PROJE GÜNCELLEMESİ isteği, bkz. RejectionReason tip tanımı):
+// bazı ret sebepleri sektörden TAMAMEN bağımsız, yapısal/kalıcı gerçeklerdir — bir firmanın e-postası
+// A sektöründe yoksa B sektöründe de yoktur. Bu sebepler GLOBAL_REJECTION_REASONS'da işaretlenir ve
+// sector_context'ten bağımsız olarak her zaman "bilinen" sayılır (Google Maps'ten tekrar gelse bile
+// Jina/LinkedIn/Gemini çağrısı yapılmadan atlanır). Düşük kurumsallık skoru ("low_corporate_score")
+// gibi sektöre göre değişebilecek sebepler bu listeye DAHİL EDİLMEZ — onlar mevcut sektör-bazlı
+// kontrole (aşağıdaki sector_context karşılaştırması) tabi kalmaya devam eder.
+const GLOBAL_REJECTION_REASONS: ReadonlySet<RejectionReason> = new Set<RejectionReason>(["no_contact_email"]);
+
 function isKnownForSector(row: KnownLeadRow, sectorContext: string | null): boolean {
   const statusMatches = row.status === "processed" || row.status === "rejected";
   if (!statusMatches) return false;
+
+  if (row.status === "rejected" && GLOBAL_REJECTION_REASONS.has(row.rejection_reason as RejectionReason)) {
+    return true;
+  }
+
   return row.sector_context === null || row.sector_context === sectorContext;
 }
 
