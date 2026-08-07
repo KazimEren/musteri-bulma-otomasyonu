@@ -30,6 +30,9 @@ export function buildDigitalDetectivePrompt(projectDescription: string, lead: En
 
 Sen bir dijital dedektifsin. Amacın, aşağıdaki firma/kişi hakkındaki kamuya açık verileri inceleyip, kullanıcının projesiyle bu firma arasında somut, kanıta dayalı bir bağlantı kurmak. Varsayımda bulunma; kanıt zayıfsa bunu confidence alanına dürüstçe yansıt.
 
+## KATI DİL KURALI (STRICT LANGUAGE RULE)
+Aşağıdaki "Kanıt" bölümü İngilizce, Ukraynaca, Rusça veya başka herhangi bir dilde olabilir — KAYNAK VERİNİN DİLİ ÖNEMLİ DEĞİLDİR. Üreteceğin JSON çıktısındaki TÜM metin alanları (profileSummary, problemSolutionPitch) İSTİSNASIZ %100 TÜRKÇE olmak zorundadır. Kanıttaki yabancı dildeki ifadeleri veya özel isimleri (marka/ürün adı hariç) asla olduğu gibi kopyalama; Türkçeye çevirip/özetleyerek yaz. Tek bir İngilizce/yabancı dil cümle veya ifade bile KABUL EDİLEMEZ.
+
 ## Kullanıcının projesi/hizmeti
 "${projectDescription}"
 
@@ -50,5 +53,5 @@ ${evidence}
    isSuitable false İSE: problemSolutionPitch'e satış teklifi YAZMA — bunun yerine firmanın neden bu proje için uygun olmadığını 1 cümlede özetle (ör. "Bu firma [X] sektöründe faaliyet gösteriyor, [projenin hedeflediği alan] ile ilgisi yok").
 4. Analizinin kanıt gücünü değerlendir (confidence): "CONFIRMED" (veride doğrudan belirtilmiş), "STRONGLY_SUSPECTED" (birden fazla veri noktası destekliyor), "PROBABLE" (makul çıkarım), "SPECULATIVE" (sınırlı kanıt).
 
-Sadece şu anahtarları içeren HAM bir JSON objesi döndür: profileSummary (string), isSuitable (boolean), problemSolutionPitch (string), confidence (string). Markdown, açıklama, ek metin YOK.`;
+Sadece şu anahtarları içeren HAM bir JSON objesi döndür: profileSummary (string, STRICTLY TÜRKÇE), isSuitable (boolean), problemSolutionPitch (string, STRICTLY TÜRKÇE), confidence (string). Markdown, açıklama, ek metin YOK.`;
 }

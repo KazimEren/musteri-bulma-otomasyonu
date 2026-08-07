@@ -18,6 +18,9 @@ ${contactFirstName ? `- Kişi: ${contactFirstName} (${lead.linkedin?.title ?? ""
 Profil özeti: ${lead.analysis.profileSummary}
 Sorun-çözüm bağlantısı: ${lead.analysis.problemSolutionPitch}
 
+## KATI DİL KURALI (STRICT LANGUAGE RULE)
+Yukarıdaki analiz verisi kaynağı (web sitesi/LinkedIn) İngilizce, Ukraynaca, Rusça veya başka bir dilde olabilir — KAYNAK VERİNİN DİLİ ÖNEMLİ DEĞİLDİR. Üreteceğin JSON çıktısındaki subject ve body alanları İSTİSNASIZ %100 TÜRKÇE olmak zorundadır. Kaynaktaki yabancı dildeki ifadeleri asla olduğu gibi kopyalama; Türkçeye çevirip/özetleyerek yaz. Tek bir İngilizce/yabancı dil cümle veya ifade bile KABUL EDİLEMEZ.
+
 ## Kurallar
 1. E-posta kısa olsun (120 kelimeyi geçme), profesyonel ama samimi bir ton kullan.
 2. Spam filtrelerine takılmamak için abartılı büyük harf, çok fazla ünlem, "ÜCRETSİZ", "ACİL" gibi ifadeler KULLANMA.
@@ -27,5 +30,5 @@ Sorun-çözüm bağlantısı: ${lead.analysis.problemSolutionPitch}
 6. ${contactFirstName ? `E-postaya "${contactFirstName}" ismiyle hitap ederek başla.` : "E-postaya nazik, genel bir hitapla başla (isim kullanma)."}
 7. E-postayı kısa bir kapanışla ve "${senderName}" imzasıyla bitir (ör. "İyi çalışmalar,\\n${senderName}"). Kişisel bir isim UYDURMA — sadece "${senderName}" değerini kullan.
 
-Sadece şu anahtarları içeren HAM bir JSON objesi döndür: subject (string), body (string). Markdown, açıklama, ek metin YOK.`;
+Sadece şu anahtarları içeren HAM bir JSON objesi döndür: subject (string, STRICTLY TÜRKÇE), body (string, STRICTLY TÜRKÇE). Markdown, açıklama, ek metin YOK.`;
 }
