@@ -151,6 +151,17 @@ async function processCandidate(
     return null;
   }
 
+  // DIGITAL DETECTIVE firma ile proje arasında savunulabilir bir bağlantı bulamadıysa
+  // (isSuitable: false) "uyumsuz/anlamsız" teşhisi hiçbir zaman Excel/Gmail çıktısına sızmaz —
+  // lead burada SEKTÖR BAZLI kalıcı olarak elenir (bkz. RejectionReason → "unsuitable_business").
+  if (!analyzed.analysis.isSuitable) {
+    console.warn(
+      `[UNSUITABLE_DROPPED] ${enriched.title}: Gemini firma ile proje arasında savunulabilir bir bağlantı bulamadı — "${analyzed.analysis.problemSolutionPitch}"`,
+    );
+    await saveRejectedLead(analyzed, "unsuitable_business", sectorContext).catch(logSaveError);
+    return null;
+  }
+
   try {
     await saveLeadAnalysis(analyzed, sectorContext);
   } catch (err) {

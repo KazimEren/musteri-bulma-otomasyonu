@@ -101,6 +101,14 @@ export interface LeadAnalysis {
   profileSummary: string;
   problemSolutionPitch: string; // 2-3 satırlık firmaya özel sorun-çözüm analizi
   confidence: "CONFIRMED" | "STRONGLY_SUSPECTED" | "PROBABLE" | "SPECULATIVE";
+  /**
+   * Gemini'nin projeyle firma arasında GERÇEK, savunulabilir bir bağlantı bulup bulamadığı.
+   * false ise pipeline bu lead'i "unsuitable_business" sebebiyle kalıcı olarak eler (bkz.
+   * pipeline.worker.ts → processCandidate); "uyumsuz/anlamsız" teşhisi hiçbir zaman Excel/Gmail
+   * çıktısına sızmaz. Gemini bu durumda problemSolutionPitch'e ZORLA bir teklif uydurmak yerine
+   * kısaca uyumsuzluk gerekçesini yazar (bkz. digital-detective.prompt.ts).
+   */
+  isSuitable: boolean;
 }
 
 export interface AnalyzedLead extends EnrichedLead {
@@ -144,12 +152,18 @@ export type LeadPersistStatus = "processed" | "rejected";
  *   düşük puan almış olabilir ama B sektöründe farklı bir puan alabilir (ör. Gemini'nin ürün/
  *   sertifika/çok dillilik değerlendirmesi hedef kitleye göre değişir), bu yüzden SEKTÖR BAZLI
  *   elenir — başka bir sektörde tekrar değerlendirmeye açılır.
+ * - "unsuitable_business": Adım 5'te DIGITAL DETECTIVE (Gemini), firma ile KULLANICININ O ANKİ
+ *   PROJESİ arasında savunulabilir bir bağlantı bulamadığını (isSuitable: false) bildirdi — firma
+ *   uyumsuz/anlamsız bulundu diye Excel/Gmail çıktısına sızmasın diye elenir. Bu değerlendirme
+ *   projeye/sektöre özgüdür (aynı firma farklı bir sektör/projede uyumlu çıkabilir), bu yüzden
+ *   SEKTÖR BAZLI elenir.
  */
 export type RejectionReason =
   | "no_contact_email"
   | "linkedin_verification_failed"
   | "enrichment_failed"
-  | "low_corporate_score";
+  | "low_corporate_score"
+  | "unsuitable_business";
 
 /**
  * Pipeline'ın üreteceği çıktı türü:

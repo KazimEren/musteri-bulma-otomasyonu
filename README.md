@@ -16,7 +16,7 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
    - Büyük ölçek → LinkedIn hattı: Apify ile karar verici kişi aranır, **LinkedIn şirket sayfasının web sitesi Google Maps'teki domain ile eşleşmiyorsa aday reddedilir** (`step4a-linkedin.ts`).
    - Küçük ölçek → Adım 4'te zaten kazınan web sitesi verisi kullanılır, ek bir Jina çağrısı yapılmaz (`step4b-webscrape.ts`).
 6. **E-Posta Kapısı** — **çıktı türünden bağımsız olarak**, iletişim e-postası (LinkedIn ya da web sitesi kazımasından) bulunamayan lead Gemini'ye (analiz/öneri/taslak üretimine) hiç gitmeden kalıcı olarak elenir (`no_contact_email`); böylece hem gereksiz token harcanmaz hem de Excel çıktısındaki E-Posta sütunu asla boş kalmaz (`pipeline.worker.ts` → `processLead`).
-7. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`).
+7. **Proje-Sorun Eşleştirme** — DIGITAL DETECTIVE promptuyla (hem LinkedIn hem web sitesi verisi bağlam olarak) kanıta dayalı sorun-çözüm analizi üretilir ve Supabase'e kaydedilir (`step5-analysis.ts`). Gemini firma ile proje arasında savunulabilir bir bağlantı bulamazsa (`isSuitable: false`) lead burada kalıcı olarak elenir (`unsuitable_business`) — "uyumsuz/anlamsız" teşhisi hiçbir zaman Excel/Gmail çıktısına sızmaz.
 8. **Çıktı** — kullanıcının seçtiği `outputType`'a göre üç moddan biri çalışır (`pipeline.worker.ts`):
    - `draft` (varsayılan) — kişiselleştirilmiş e-posta üretilir ve Gmail API ile **sadece taslak** olarak kaydedilir, asla otomatik gönderilmez (`step6-gmail-draft.ts`).
    - `excel_info` — Gmail'e hiç gidilmez, e-posta taslağı da üretilmez (jet hızlı, az token); sonuç sadece şirket analizi + öneri olarak Excel'e hazır tutulur.
@@ -24,11 +24,11 @@ Mimarinin tam açıklaması için bkz. [`SISTEM_MIMARISI.md`](./SISTEM_MIMARISI.
 
 Tüm adımlar `src/queue/pipeline.worker.ts` içinde BullMQ worker'ı tarafından sırayla orkestre edilir. `result.leads`'teki her lead'in (çıktı türünden bağımsız) geçerli bir `contactEmail`'i vardır.
 
-Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
+Bir lead pipeline'dan kalıcı bir sebeple düşerse (`no_contact_email`, `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`, `unsuitable_business`) Supabase'e `status: "rejected"` olarak kaydedilir ki Adım 3'teki dedup gelecekteki taramalarda onu tekrar denemesin. **`scaleFilter` uyuşmazlığından düşen lead'ler buna dahil değildir** — bu, o anki arama tercihine özgüdür; aynı işletme farklı bir `scaleFilter` ile aranırsa yeniden değerlendirilir.
 
 Bu ret sebeplerinin kapsamı aynı değildir (bkz. `step2b-dedupe.ts` → `GLOBAL_REJECTION_REASONS`):
 - **Global (sektörden bağımsız)** — `no_contact_email`: firmanın hiçbir kaynakta e-postası yoksa/domain'i erişilemezse bu her sektörde geçerli yapısal bir gerçektir; hangi sektörde aranırsa aransın Google Maps'ten tekrar gelse bile hiç işlenmeden atlanır.
-- **Sektör bazlı** — `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`: sadece elendiği sektör bağlamında geçerlidir; firma başka bir sektörde aranırsa (ör. Gemini'nin kurumsallık skorlaması hedef kitleye göre farklı sonuç verebileceği için) yeniden değerlendirmeye açılır.
+- **Sektör bazlı** — `linkedin_verification_failed`, `enrichment_failed`, `low_corporate_score`, `unsuitable_business`: sadece elendiği sektör/proje bağlamında geçerlidir; firma başka bir sektörde/projede aranırsa (ör. Gemini'nin kurumsallık skorlaması ya da uygunluk değerlendirmesi hedef kitleye göre farklı sonuç verebileceği için) yeniden değerlendirmeye açılır.
 
 ## Yerel Arayüz
 

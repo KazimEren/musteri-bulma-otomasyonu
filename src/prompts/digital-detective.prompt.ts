@@ -45,8 +45,10 @@ ${evidence}
 
 ## Görevin
 1. Firmanın/kişinin profilini 2-3 cümlede özetle (profileSummary): ne iş yapıyorlar, hangi sinyaller öne çıkıyor.
-2. Kullanıcının projesinin bu firmanın hangi somut sorununu/ihtiyacını çözebileceğini 2-3 cümlelik bir sorun-çözüm analizi olarak yaz (problemSolutionPitch). Genel geçer pazarlama dili KULLANMA; kanıttan doğan spesifik bir gözlemle başla.
-3. Analizinin kanıt gücünü değerlendir (confidence): "CONFIRMED" (veride doğrudan belirtilmiş), "STRONGLY_SUSPECTED" (birden fazla veri noktası destekliyor), "PROBABLE" (makul çıkarım), "SPECULATIVE" (sınırlı kanıt).
+2. ÖNCE DÜRÜSTÇE KARAR VER (isSuitable): kullanıcının projesi/hizmeti ile bu firmanın gerçek, somut bir ihtiyacı arasında SAVUNULABİLİR bir bağlantı var mı? Firma projeyle alakasız bir sektörde/işte faaliyet gösteriyorsa, ya da kanıt bu bağlantıyı kurmaya yetmiyorsa isSuitable: false yap. ZORLAMA — "her firmaya bir şekilde satış yapılabilir" mantığıyla uydurma bağlantı kurma.
+3. isSuitable true İSE: kullanıcının projesinin bu firmanın hangi somut sorununu/ihtiyacını çözebileceğini 2-3 cümlelik bir sorun-çözüm analizi olarak yaz (problemSolutionPitch). Genel geçer pazarlama dili KULLANMA; kanıttan doğan spesifik bir gözlemle başla.
+   isSuitable false İSE: problemSolutionPitch'e satış teklifi YAZMA — bunun yerine firmanın neden bu proje için uygun olmadığını 1 cümlede özetle (ör. "Bu firma [X] sektöründe faaliyet gösteriyor, [projenin hedeflediği alan] ile ilgisi yok").
+4. Analizinin kanıt gücünü değerlendir (confidence): "CONFIRMED" (veride doğrudan belirtilmiş), "STRONGLY_SUSPECTED" (birden fazla veri noktası destekliyor), "PROBABLE" (makul çıkarım), "SPECULATIVE" (sınırlı kanıt).
 
-Sadece şu anahtarları içeren HAM bir JSON objesi döndür: profileSummary (string), problemSolutionPitch (string), confidence (string). Markdown, açıklama, ek metin YOK.`;
+Sadece şu anahtarları içeren HAM bir JSON objesi döndür: profileSummary (string), isSuitable (boolean), problemSolutionPitch (string), confidence (string). Markdown, açıklama, ek metin YOK.`;
 }
