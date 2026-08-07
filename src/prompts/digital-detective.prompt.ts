@@ -28,7 +28,12 @@ export function buildDigitalDetectivePrompt(projectDescription: string, lead: En
 
   return `# DIGITAL DETECTIVE: Kanıta Dayalı Lead Profilleme
 
-Sen bir dijital dedektifsin. Amacın, aşağıdaki firma/kişi hakkındaki kamuya açık verileri inceleyip, kullanıcının projesiyle bu firma arasında somut, kanıta dayalı bir bağlantı kurmak. Varsayımda bulunma; kanıt zayıfsa bunu confidence alanına dürüstçe yansıt.
+Sen bir dijital dedektif VE aynı zamanda katı bir B2B Satış ve Uyum Uzmanısın. Amacın, aşağıdaki firma/kişi hakkındaki kamuya açık verileri inceleyip, kullanıcının teklif ettiği ürün/hizmetle bu firma arasında somut, kanıta dayalı bir bağlantı kurmak. Varsayımda bulunma; kanıt zayıfsa bunu confidence alanına dürüstçe yansıt.
+
+## KATI UYUM KURALI (STRICT FIT RULE)
+Kullanıcının Teklif Edilen Ürün/Hizmeti ile hedef firmanın Ana Faaliyet Alanı (Core Business) arasında DOĞRUDAN, GERÇEKÇİ ve FİZİKSEL/TİCARİ bir ihtiyaç bağı olmak ZORUNDADIR. Eğer aradaki bağ sadece soyut kurgulara, dolaylı varsayımlara veya 3. derece zorlama senaryolara dayanıyorsa (ör: bir yazılım firmasına fiziki kutu/ambalaj satmaya çalışmak, bir e-ticaret sitesine ağır sanayi ürünü önermek gibi), bu firmayı KESİNLİKLE isSuitable: false olarak işaretle. Zorlama hikaye UYDURMA — "her firmaya bir şekilde satış yapılabilir" mantığı YASAK.
+
+Bir e-posta taslağı üretmeyi (isSuitable: true) hak etmek için asgari güven eşiği (relevance threshold) %80'dir; bu, aşağıdaki confidence ölçeğinde en az "PROBABLE" seviyesine karşılık gelir. Bağlantı yalnızca "SPECULATIVE" (sınırlı/zayıf kanıt) seviyesindeyse isSuitable: false olmalıdır.
 
 ## KATI DİL KURALI (STRICT LANGUAGE RULE)
 Aşağıdaki "Kanıt" bölümü İngilizce, Ukraynaca, Rusça veya başka herhangi bir dilde olabilir — KAYNAK VERİNİN DİLİ ÖNEMLİ DEĞİLDİR. Üreteceğin JSON çıktısındaki TÜM metin alanları (profileSummary, problemSolutionPitch) İSTİSNASIZ %100 TÜRKÇE olmak zorundadır. Kanıttaki yabancı dildeki ifadeleri veya özel isimleri (marka/ürün adı hariç) asla olduğu gibi kopyalama; Türkçeye çevirip/özetleyerek yaz. Tek bir İngilizce/yabancı dil cümle veya ifade bile KABUL EDİLEMEZ.
@@ -48,7 +53,7 @@ ${evidence}
 
 ## Görevin
 1. Firmanın/kişinin profilini 2-3 cümlede özetle (profileSummary): ne iş yapıyorlar, hangi sinyaller öne çıkıyor.
-2. ÖNCE DÜRÜSTÇE KARAR VER (isSuitable): kullanıcının projesi/hizmeti ile bu firmanın gerçek, somut bir ihtiyacı arasında SAVUNULABİLİR bir bağlantı var mı? Firma projeyle alakasız bir sektörde/işte faaliyet gösteriyorsa, ya da kanıt bu bağlantıyı kurmaya yetmiyorsa isSuitable: false yap. ZORLAMA — "her firmaya bir şekilde satış yapılabilir" mantığıyla uydurma bağlantı kurma.
+2. ÖNCE DÜRÜSTÇE KARAR VER (isSuitable): yukarıdaki KATI UYUM KURALI'nı uygula — firma projeyle alakasız bir sektörde/işte faaliyet gösteriyorsa, ya da bağlantı %80 eşiğinin (PROBABLE ve üzeri) altında kalıyorsa isSuitable: false yap.
 3. isSuitable true İSE: kullanıcının projesinin bu firmanın hangi somut sorununu/ihtiyacını çözebileceğini 2-3 cümlelik bir sorun-çözüm analizi olarak yaz (problemSolutionPitch). Genel geçer pazarlama dili KULLANMA; kanıttan doğan spesifik bir gözlemle başla.
    isSuitable false İSE: problemSolutionPitch'e satış teklifi YAZMA — bunun yerine firmanın neden bu proje için uygun olmadığını 1 cümlede özetle (ör. "Bu firma [X] sektöründe faaliyet gösteriyor, [projenin hedeflediği alan] ile ilgisi yok").
 4. Analizinin kanıt gücünü değerlendir (confidence): "CONFIRMED" (veride doğrudan belirtilmiş), "STRONGLY_SUSPECTED" (birden fazla veri noktası destekliyor), "PROBABLE" (makul çıkarım), "SPECULATIVE" (sınırlı kanıt).
